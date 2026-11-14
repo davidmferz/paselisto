@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapOrderRow, mapPassRow, mapEventRow, orderPatchToSet, mapRedeemRow } from "./neon-repo";
+import { mapOrderRow, mapPassRow, mapEventRow, orderPatchToSet, mapRedeemRow, classifyEventInsertError } from "./neon-repo";
 
 const d = new Date("2026-01-01T10:00:00.000Z");
 
@@ -39,6 +39,7 @@ describe("neon-repo row mapping", () => {
     expect(mapEventRow({ id: "e", slug: "s", name: "N", price_cents: 100, capacity: 5 })).toEqual({
       id: "e", slug: "s", name: "N", priceCents: 100, capacity: 5,
       description: null, startsAt: null, venue: null, contactEmail: null, createdAt: null,
+      organizerName: null, createdByRequest: null,
     });
   });
 
@@ -71,5 +72,24 @@ describe("neon-repo row mapping", () => {
     expect(mapRedeemRow({ ...row, used_at: null }, false, "e2")).toEqual({
       kind: "WRONG_EVENT", eventName: "A", startsAt: d,
     });
+  });
+});
+
+describe("event creation helpers", () => {
+  it("maps organizer_name and created_by_request", () => {
+    expect(
+      mapEventRow({ id: "e", slug: "s", name: "N", price_cents: 1, capacity: 1, organizer_name: "Org", created_by_request: "k" }),
+    ).toMatchObject({ organizerName: "Org", createdByRequest: "k" });
+    expect(mapEventRow({ id: "e", slug: "s", name: "N", price_cents: 1, capacity: 1 })).toMatchObject({
+      organizerName: null, createdByRequest: null,
+    });
+  });
+
+  it("classifies unique violations by constraint, rethrows anything else", () => {
+    expect(classifyEventInsertError({ code: "23505", constraint: "events_slug_key" })).toBe("slug_taken");
+    expect(classifyEventInsertError({ code: "23505", constraint: "events_pkey" })).toBe("slug_taken");
+    expect(classifyEventInsertError({ code: "23505", constraint: "events_created_by_request_key" })).toBe("key_taken");
+    expect(() => classifyEventInsertError({ code: "23505", constraint: "other" })).toThrow();
+    expect(() => classifyEventInsertError(new Error("boom"))).toThrow("boom");
   });
 });

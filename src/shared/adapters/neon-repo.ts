@@ -1,6 +1,6 @@
 import { Pool, neonConfig, type PoolClient } from "@neondatabase/serverless";
 import ws from "ws";
-import type { AdminOrderRow, EventRow, Order, OrdersRepo, Pass, RedeemResult, Tx } from "../ports";
+import type { AdminOrderRow, EventRow, InsertEventResult, Order, OrdersRepo, Pass, RedeemResult, Tx } from "../ports";
 
 /** In Node (scripts, Vercel nodejs runtime) the Neon Pool needs a WebSocket constructor. */
 export function configureNeonWebSocket(): void {
@@ -50,7 +50,19 @@ export function mapEventRow(r: Row): EventRow {
     venue: (r.venue as string | null) ?? null,
     contactEmail: (r.contact_email as string | null) ?? null,
     createdAt: (r.created_at as Date | null) ?? null,
+    organizerName: (r.organizer_name as string | null) ?? null,
+    createdByRequest: (r.created_by_request as string | null) ?? null,
   };
+}
+
+/** Maps a Postgres unique violation on events to a domain result; anything else is rethrown. */
+export function classifyEventInsertError(err: unknown): "slug_taken" | "key_taken" {
+  const e = err as { code?: string; constraint?: string } | null;
+  if (e?.code === "23505") {
+    if (e.constraint === "events_created_by_request_key") return "key_taken";
+    if (e.constraint === "events_slug_key" || e.constraint === "events_pkey") return "slug_taken";
+  }
+  throw err;
 }
 
 const ORDER_COLUMNS: Record<keyof Order, string> = {
@@ -260,6 +272,34 @@ export function createNeonRepo(connectionString: string): OrdersRepo {
       const pool = new Pool({ connectionString });
       try {
         const { rows } = await pool.query("SELECT * FROM events WHERE id = $1", [id]);
+        return rows[0] ? mapEventRow(rows[0]) : null;
+      } finally {
+        await pool.end();
+      }
+    },
+
+    async insertEvent(e: EventRow): Promise<InsertEventResult> {
+      const pool = new Pool({ connectionString });
+      try {
+        await pool.query(
+          `INSERT INTO events(id, slug, name, price_cents, capacity, description, starts_at, venue, contact_email,
+             created_at, organizer_name, created_by_request)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [e.id, e.slug, e.name, e.priceCents, e.capacity, e.description ?? null, e.startsAt ?? null, e.venue ?? null,
+            e.contactEmail ?? null, e.createdAt ?? new Date(), e.organizerName ?? null, e.createdByRequest ?? null],
+        );
+        return "ok";
+      } catch (err) {
+        return classifyEventInsertError(err);
+      } finally {
+        await pool.end();
+      }
+    },
+
+    async findEventByRequestKey(key: string): Promise<EventRow | null> {
+      const pool = new Pool({ connectionString });
+      try {
+        const { rows } = await pool.query("SELECT * FROM events WHERE created_by_request = $1", [key]);
         return rows[0] ? mapEventRow(rows[0]) : null;
       } finally {
         await pool.end();

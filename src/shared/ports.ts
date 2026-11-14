@@ -34,6 +34,9 @@ export type EventRow = {
   venue?: string | null;
   contactEmail?: string | null;
   createdAt?: Date | null;
+  organizerName?: string | null;
+  /** Idempotency key of the publish request that created this event. */
+  createdByRequest?: string | null;
 };
 
 export interface PeyClient {
@@ -58,6 +61,8 @@ export type RedeemResult =
   | { kind: "NOT_PAID" }
   /** The pass is valid but belongs to another event: NOT consumed. */
   | { kind: "WRONG_EVENT"; eventName: string; startsAt: Date | null };
+
+export type InsertEventResult = "ok" | "slug_taken" | "key_taken";
 
 /** Operations available inside a per-event locked transaction. */
 export interface Tx {
@@ -92,4 +97,7 @@ export interface OrdersRepo {
   findEventBySlug(slug: string): Promise<EventRow | null>;
   countOccupied(eventId: string, now: Date): Promise<number>;
   findPassByOrderId(orderId: string): Promise<Pass | null>;
+  /** Unique-safe insert: reports which unique constraint (slug / idempotency key) was violated. */
+  insertEvent(e: EventRow): Promise<InsertEventResult>;
+  findEventByRequestKey(key: string): Promise<EventRow | null>;
 }

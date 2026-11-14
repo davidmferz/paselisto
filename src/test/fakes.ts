@@ -1,4 +1,4 @@
-import type { AdminOrderRow, Clock, EventRow, Order, OrdersRepo, Pass, PeyClient, RedeemResult, Tx } from "@/shared/ports";
+import type { AdminOrderRow, Clock, EventRow, InsertEventResult, Order, OrdersRepo, Pass, PeyClient, RedeemResult, Tx } from "@/shared/ports";
 
 export class FakeClock implements Clock {
   constructor(private t: Date = new Date("2026-01-01T00:00:00Z")) {}
@@ -65,6 +65,20 @@ export class FakeRepo implements OrdersRepo {
   async listEvents(): Promise<EventRow[]> {
     const t = (e: EventRow) => (e.startsAt ? e.startsAt.getTime() : Number.POSITIVE_INFINITY);
     return [...this.events.values()].sort((a, b) => t(a) - t(b));
+  }
+
+  async insertEvent(e: EventRow): Promise<InsertEventResult> {
+    // Synchronous check+write == atomic, like a DB unique constraint.
+    const all = [...this.events.values()];
+    if (e.createdByRequest && all.some((x) => x.createdByRequest === e.createdByRequest)) return "key_taken";
+    if (all.some((x) => x.slug === e.slug) || this.events.has(e.id)) return "slug_taken";
+    this.events.set(e.id, { ...e });
+    return "ok";
+  }
+
+  async findEventByRequestKey(key: string): Promise<EventRow | null> {
+    const e = [...this.events.values()].find((x) => x.createdByRequest === key);
+    return e ? { ...e } : null;
   }
 
   async findPassByOrderId(orderId: string): Promise<Pass | null> {
