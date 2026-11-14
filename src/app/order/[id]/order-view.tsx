@@ -36,13 +36,32 @@ function useQrDataUrl(text: string | null, width: number) {
   return text ? url : null;
 }
 
-function download(dataUrl: string, filename: string) {
+/**
+ * Mobile browsers (iOS Safari, WhatsApp/Instagram in-app views) ignore `<a download>`
+ * on data URLs, so on touch devices we hand the PNG to the native share sheet
+ * ("Guardar imagen" → Photos). Desktop keeps a direct download via a blob URL.
+ */
+async function download(dataUrl: string, filename: string) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const file = new File([blob], filename, { type: "image/png" });
+  const isTouch = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  if (isTouch && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: filename });
+      return;
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = dataUrl;
+  a.href = url;
   a.download = filename;
+  a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
   a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /** Visual countdown; hidden from assistive tech so it never spams the live region. */
