@@ -31,4 +31,15 @@ describe("fakes", () => {
     c.advance(1000);
     expect(c.now().getTime() - t0).toBe(1000);
   });
+
+  it("FakeRepo listEvents orders by startsAt with nulls last; findEventById", async () => {
+    const repo = new FakeRepo();
+    const e = (id: string, startsAt?: Date) => ({ id, slug: id, name: id, priceCents: 1, capacity: 1, startsAt });
+    repo.seedEvent(e("nodate"));
+    repo.seedEvent(e("late", new Date("2026-12-01T00:00:00Z")));
+    repo.seedEvent(e("early", new Date("2026-11-01T00:00:00Z")));
+    expect((await repo.listEvents()).map((x) => x.id)).toEqual(["early", "late", "nodate"]);
+    expect((await repo.findEventById("late"))?.id).toBe("late");
+    expect(await repo.findEventById("zzz")).toBeNull();
+  });
 });

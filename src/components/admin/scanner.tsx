@@ -18,6 +18,12 @@ function view(o: ScanOutcome): { bg: string; title: string; sub?: string } {
       };
     case "NOT_PAID":
       return { bg: "bg-red-800", title: "RECHAZADO: pago no confirmado" };
+    case "WRONG_EVENT":
+      return {
+        bg: "bg-amber-800",
+        title: "Otro taller",
+        sub: `Válido para «${o.eventName}»${o.startsAt ? ` (${new Date(o.startsAt).toLocaleString("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })})` : ""} · No se registró entrada`,
+      };
     case "NOT_FOUND":
       return { bg: "bg-red-800", title: "NO EXISTE", sub: "Código no encontrado" };
     default:
@@ -27,7 +33,7 @@ function view(o: ScanOutcome): { bg: string; title: string; sub?: string } {
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-600";
 
-export function Scanner() {
+export function Scanner({ eventId }: { eventId: string }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const phaseRef = useRef<"idle" | "validating" | "result">("idle");
@@ -53,7 +59,7 @@ export function Scanner() {
         const res = await fetch("/api/admin/redeem", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: t }),
+          body: JSON.stringify({ token: t, eventId }),
         });
         if (res.status === 401) {
           dispatch({ type: "abort" });
@@ -68,7 +74,7 @@ export function Scanner() {
         dispatch({ type: "resolve", outcome: { kind: "ERROR" } });
       }
     },
-    [router],
+    [router, eventId],
   );
 
   const next = useCallback(() => {

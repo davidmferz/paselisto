@@ -22,7 +22,19 @@ export type Order = {
 
 export type Pass = { id: string; orderId: string; token: string; usedAt: Date | null };
 
-export type EventRow = { id: string; slug: string; name: string; priceCents: number; capacity: number };
+export type EventRow = {
+  id: string;
+  slug: string;
+  name: string;
+  priceCents: number;
+  capacity: number;
+  /** Optional on purpose: older fixtures / pre-migration rows lack them (mapper yields null). */
+  description?: string | null;
+  startsAt?: Date | null;
+  venue?: string | null;
+  contactEmail?: string | null;
+  createdAt?: Date | null;
+};
 
 export interface PeyClient {
   createQr(i: {
@@ -43,7 +55,9 @@ export type RedeemResult =
   | { kind: "OK"; buyer: string }
   | { kind: "ALREADY_USED"; usedAt: Date }
   | { kind: "NOT_FOUND" }
-  | { kind: "NOT_PAID" };
+  | { kind: "NOT_PAID" }
+  /** The pass is valid but belongs to another event: NOT consumed. */
+  | { kind: "WRONG_EVENT"; eventName: string; startsAt: Date | null };
 
 /** Operations available inside a per-event locked transaction. */
 export interface Tx {
@@ -65,11 +79,15 @@ export type AdminOrderRow = { order: Order; usedAt: Date | null };
 
 export interface OrdersRepo {
   withEventLock<T>(eventId: string, fn: (tx: Tx) => Promise<T>): Promise<T>;
-  redeem(token: string, now: Date): Promise<RedeemResult>;
+  /** Atomic: only consumes a paid, unused pass that belongs to `eventId`. */
+  redeem(token: string, eventId: string, now: Date): Promise<RedeemResult>;
   /** Unlocked read used to discover which event lock to take (by order id, else pey_qr_id). */
   findOrder(ref: { orderId?: string; peyQrId?: string }): Promise<Order | null>;
-  /** All orders (admin panel), with pass used_at. */
-  listOrders(): Promise<AdminOrderRow[]>;
+  /** Orders of ONE event (admin panel), filtered before the LIMIT, with pass used_at. */
+  listOrders(eventId: string): Promise<AdminOrderRow[]>;
+  findEventById(id: string): Promise<EventRow | null>;
+  /** Ordered by starts_at ascending, nulls last. */
+  listEvents(): Promise<EventRow[]>;
   /** Buyer flow (unlocked reads). */
   findEventBySlug(slug: string): Promise<EventRow | null>;
   countOccupied(eventId: string, now: Date): Promise<number>;

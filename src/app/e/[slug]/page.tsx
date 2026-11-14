@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { getEventView } from "@/features/checkout/use-cases";
 import { getClock, getRepo } from "@/shared/container";
-import { getConfig } from "@/shared/config";
-import { formatMxn } from "@/shared/format";
+import { formatEventDate, formatMxn } from "@/shared/format";
 import { BuyForm } from "./buy-form";
 
 export const runtime = "nodejs";
@@ -12,12 +11,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
   const event = await getEventView({ repo: getRepo(), clock: getClock() }, slug);
   if (!event) notFound();
-  const info = getConfig().event;
   const rows = [
-    ["Fecha", info.date],
-    ["Lugar", info.venue],
-    ["Organiza", info.organizer],
-    ["Contacto", info.contact],
+    ["Fecha", event.startsAt ? formatEventDate(event.startsAt) : null],
+    ["Lugar", event.venue],
+    ["Contacto", event.contact],
   ].filter((r): r is [string, string] => Boolean(r[1]));
 
   return (
@@ -32,6 +29,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           {event.spotsLeft > 0 ? `Quedan ${event.spotsLeft} lugares` : "Sin lugares disponibles"}
         </p>
       </header>
+
+      {event.description && <p className="text-sm">{event.description}</p>}
 
       {rows.length > 0 && (
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-xl border p-4 text-sm">

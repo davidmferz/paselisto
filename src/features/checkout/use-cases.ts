@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { effectiveStatus, hasCapacity, validateBuyer } from "./domain";
 import { shortRef } from "./copy";
 import { applyPayment } from "@/features/webhook/handle-payment";
-import type { Clock, OrderStatus, OrdersRepo, PeyClient } from "@/shared/ports";
+import type { Clock, EventRow, OrderStatus, OrdersRepo, PeyClient } from "@/shared/ports";
 
 export const ORDER_TTL_SEC = 900;
 /** Head start for the signed webhook before the polling fallback kicks in. */
@@ -13,6 +13,7 @@ type Deps = { repo: OrdersRepo; pey: PeyClient; clock: Clock };
 export type CreateOrderResult =
   | { kind: "ok"; orderId: string; qrString: string; expiresAt: Date }
   | { kind: "invalid"; error: string }
+  | { kind: "event_required" }
   | { kind: "event_not_found" }
   | { kind: "sold_out" }
   | { kind: "pey_error" };
@@ -21,10 +22,13 @@ export async function createOrder(
   deps: Deps,
   i: { slug: string; name: unknown; email: unknown },
 ): Promise<CreateOrderResult> {
+  // Explicit event only: there is NO default/fallback event at checkout.
+  const slug = typeof i.slug === "string" ? i.slug.trim() : "";
+  if (!slug) return { kind: "event_required" };
   const v = validateBuyer(i);
   if (!v.ok) return { kind: "invalid", error: v.error };
 
-  const event = await deps.repo.findEventBySlug(i.slug);
+  const event = await deps.repo.findEventBySlug(slug);
   if (!event) return { kind: "event_not_found" };
 
   const now = deps.clock.now();
@@ -73,7 +77,17 @@ export async function createOrder(
   }
 }
 
-export type EventView = { slug: string; name: string; priceCents: number; capacity: number; spotsLeft: number };
+export type EventView = {
+  slug: string;
+  name: string;
+  priceCents: number;
+  capacity: number;
+  spotsLeft: number;
+  description: string | null;
+  startsAt: Date | null;
+  venue: string | null;
+  contact: string | null;
+};
 
 export async function getEventView(
   deps: Pick<Deps, "repo" | "clock">,
@@ -88,7 +102,44 @@ export async function getEventView(
     priceCents: event.priceCents,
     capacity: event.capacity,
     spotsLeft: Math.max(0, event.capacity - occupied),
+    description: event.description ?? null,
+    startsAt: event.startsAt ?? null,
+    venue: event.venue ?? null,
+    contact: event.contactEmail ?? null,
   };
+}
+
+/** The order's own event, resolved from the DB (never from global config). */
+export type OrderEventView = {
+  slug: string;
+  name: string;
+  startsAt: Date | null;
+  venue: string | null;
+  contact: string | null;
+};
+
+function toOrderEventView(e: EventRow): OrderEventView {
+  return { slug: e.slug, name: e.name, startsAt: e.startsAt ?? null, venue: e.venue ?? null, contact: e.contactEmail ?? null };
+}
+
+export async function getOrderEventView(repo: OrdersRepo, orderId: string): Promise<OrderEventView | null> {
+  const order = await repo.findOrder({ orderId });
+  if (!order) return null;
+  const event = await repo.findEventById(order.eventId);
+  return event ? toOrderEventView(event) : null;
+}
+
+export type CalendarInfo = { orderId: string; passToken: string; event: OrderEventView };
+
+/** Calendar data only for paid orders whose event has a known start; null otherwise. */
+export async function getCalendarInfo(repo: OrdersRepo, orderId: string): Promise<CalendarInfo | null> {
+  const order = await repo.findOrder({ orderId });
+  if (!order || order.status !== "paid") return null;
+  const event = await repo.findEventById(order.eventId);
+  if (!event?.startsAt) return null;
+  const pass = await repo.findPassByOrderId(order.id);
+  if (!pass) return null;
+  return { orderId: order.id, passToken: pass.token, event: toOrderEventView(event) };
 }
 
 export type OrderStatusResult =
@@ -101,6 +152,7 @@ export type OrderStatusResult =
       passToken?: string;
       /** Short human reference (support / review state). */
       orderRef: string;
+      event: OrderEventView;
       /** Only while pending: the CoDi QR payload. */
       qrString?: string;
     };
@@ -112,6 +164,8 @@ export async function getOrderStatus(
 ): Promise<OrderStatusResult> {
   let order = await deps.repo.findOrder({ orderId });
   if (!order) return { kind: "not_found" };
+  const eventRow = await deps.repo.findEventById(order.eventId);
+  if (!eventRow) return { kind: "not_found" };
 
   const now = deps.clock.now();
   const eff = effectiveStatus(order, now);
@@ -151,6 +205,7 @@ export async function getOrderStatus(
     buyerName: order.buyerName,
     expiresAt: order.expiresAt,
     orderRef: shortRef(order.id),
+    event: toOrderEventView(eventRow),
     ...(status === "pending" && order.peyQrString ? { qrString: order.peyQrString } : {}),
     ...(pass ? { passToken: pass.token } : {}),
   };

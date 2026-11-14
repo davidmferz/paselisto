@@ -14,11 +14,31 @@ export type AdminOrder = {
   usedAt: string | null;
 };
 
-export type AdminOrdersView = { orders: AdminOrder[]; counts: Record<AdminStatus, number> };
+export type Counters = { sold: number; reserved: number; available: number; entered: number; capacity: number };
 
-export async function listOrders(repo: OrdersRepo, clock: Clock): Promise<AdminOrdersView> {
+export type AdminOrdersView = {
+  event: { id: string; slug: string; name: string; capacity: number; startsAt: string | null };
+  orders: AdminOrder[];
+  counts: Record<AdminStatus, number>;
+  counters: Counters;
+};
+
+/**
+ * Coherent capacity counters: vendidos = paid + used, reservados = pending (unexpired),
+ * disponibles = capacity - vendidos - reservados, ingresaron = used.
+ */
+export function computeCounters(counts: Record<AdminStatus, number>, capacity: number): Counters {
+  const sold = counts.paid + counts.used;
+  const reserved = counts.pending;
+  return { sold, reserved, available: Math.max(0, capacity - sold - reserved), entered: counts.used, capacity };
+}
+
+/** Orders of one event; null when the event does not exist. */
+export async function listOrders(repo: OrdersRepo, clock: Clock, eventId: string): Promise<AdminOrdersView | null> {
+  const event = await repo.findEventById(eventId);
+  if (!event) return null;
   const now = clock.now();
-  const rows = await repo.listOrders();
+  const rows = await repo.listOrders(eventId);
   const counts: Record<AdminStatus, number> = { pending: 0, paid: 0, used: 0, review: 0, expired: 0 };
   const sorted = [...rows].sort((a, b) => b.order.createdAt.getTime() - a.order.createdAt.getTime());
   const orders = sorted.map(({ order, usedAt }): AdminOrder => {
@@ -39,5 +59,10 @@ export async function listOrders(repo: OrdersRepo, clock: Clock): Promise<AdminO
       usedAt: usedAt ? usedAt.toISOString() : null,
     };
   });
-  return { orders, counts };
+  return {
+    event: { id: event.id, slug: event.slug, name: event.name, capacity: event.capacity, startsAt: event.startsAt?.toISOString() ?? null },
+    orders,
+    counts,
+    counters: computeCounters(counts, event.capacity),
+  };
 }

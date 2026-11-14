@@ -45,6 +45,11 @@ export function mapEventRow(r: Row): EventRow {
     name: r.name as string,
     priceCents: Number(r.price_cents),
     capacity: Number(r.capacity),
+    description: (r.description as string | null) ?? null,
+    startsAt: (r.starts_at as Date | null) ?? null,
+    venue: (r.venue as string | null) ?? null,
+    contactEmail: (r.contact_email as string | null) ?? null,
+    createdAt: (r.created_at as Date | null) ?? null,
   };
 }
 
@@ -77,15 +82,25 @@ export function orderPatchToSet(patch: Partial<Order>): { sql: string; values: u
   return { sql: parts.join(", "), values };
 }
 
-export function mapRedeemRow(
-  r: { buyer_name: string; status: string; used_at: Date | null } | null,
-  redeemedNow: boolean,
-): RedeemResult {
+export type RedeemRow = {
+  buyer_name: string;
+  status: string;
+  used_at: Date | null;
+  event_id: string;
+  event_name: string | null;
+  starts_at: Date | null;
+};
+
+/** Pure mapping of the redeem lookup row; mirrors checkin/domain.ts mapRedeem. */
+export function mapRedeemRow(r: RedeemRow | null, redeemedNow: boolean, expectedEventId: string): RedeemResult {
   if (!r) return { kind: "NOT_FOUND" };
+  if (r.event_id !== expectedEventId) {
+    return { kind: "WRONG_EVENT", eventName: r.event_name ?? "otro taller", startsAt: r.starts_at ?? null };
+  }
   if (redeemedNow) return { kind: "OK", buyer: r.buyer_name };
   if (r.status !== "paid") return { kind: "NOT_PAID" };
   if (r.used_at) return { kind: "ALREADY_USED", usedAt: r.used_at };
-  // paid, unused, yet the atomic update matched nothing: treat as not found-safe state
+  // paid, unused, same event, yet the atomic update matched nothing: lost a race we cannot classify
   return { kind: "NOT_FOUND" };
 }
 
@@ -241,12 +256,36 @@ export function createNeonRepo(connectionString: string): OrdersRepo {
       }
     },
 
-    async listOrders(): Promise<AdminOrderRow[]> {
+    async findEventById(id: string): Promise<EventRow | null> {
+      const pool = new Pool({ connectionString });
+      try {
+        const { rows } = await pool.query("SELECT * FROM events WHERE id = $1", [id]);
+        return rows[0] ? mapEventRow(rows[0]) : null;
+      } finally {
+        await pool.end();
+      }
+    },
+
+    async listEvents(): Promise<EventRow[]> {
+      const pool = new Pool({ connectionString });
+      try {
+        const { rows } = await pool.query(
+          "SELECT * FROM events ORDER BY starts_at ASC NULLS LAST, created_at ASC NULLS LAST, slug ASC",
+        );
+        return rows.map(mapEventRow);
+      } finally {
+        await pool.end();
+      }
+    },
+
+    async listOrders(eventId: string): Promise<AdminOrderRow[]> {
       const pool = new Pool({ connectionString });
       try {
         const { rows } = await pool.query(
           `SELECT o.*, p.used_at FROM orders o LEFT JOIN passes p ON p.order_id = o.id
+           WHERE o.event_id = $1
            ORDER BY o.created_at DESC LIMIT 500`,
+          [eventId],
         );
         return rows.map((r) => ({ order: mapOrderRow(r), usedAt: (r.used_at as Date | null) ?? null }));
       } finally {
@@ -254,22 +293,25 @@ export function createNeonRepo(connectionString: string): OrdersRepo {
       }
     },
 
-    async redeem(token: string, now: Date): Promise<RedeemResult> {
+    async redeem(token: string, eventId: string, now: Date): Promise<RedeemResult> {
       const pool = new Pool({ connectionString });
       try {
+        // Atomic: the event check lives in the UPDATE itself, so a pass of another event is never consumed.
         const upd = await pool.query(
-          `UPDATE passes p SET used_at = $2 FROM orders o
-           WHERE p.order_id = o.id AND p.token = $1 AND p.used_at IS NULL AND o.status = 'paid'
-           RETURNING o.buyer_name, o.status, p.used_at`,
-          [token, now],
+          `UPDATE passes p SET used_at = $3 FROM orders o
+           WHERE p.order_id = o.id AND p.token = $1 AND p.used_at IS NULL
+             AND o.status = 'paid' AND o.event_id = $2
+           RETURNING o.buyer_name, o.status, p.used_at, o.event_id, NULL::text AS event_name, NULL::timestamptz AS starts_at`,
+          [token, eventId, now],
         );
-        if (upd.rows[0]) return mapRedeemRow(upd.rows[0], true);
+        if (upd.rows[0]) return mapRedeemRow(upd.rows[0], true, eventId);
         const sel = await pool.query(
-          `SELECT o.buyer_name, o.status, p.used_at FROM passes p JOIN orders o ON o.id = p.order_id
+          `SELECT o.buyer_name, o.status, p.used_at, o.event_id, e.name AS event_name, e.starts_at
+           FROM passes p JOIN orders o ON o.id = p.order_id JOIN events e ON e.id = o.event_id
            WHERE p.token = $1`,
           [token],
         );
-        return mapRedeemRow(sel.rows[0] ?? null, false);
+        return mapRedeemRow(sel.rows[0] ?? null, false, eventId);
       } finally {
         await pool.end();
       }

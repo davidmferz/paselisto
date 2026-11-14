@@ -58,6 +58,15 @@ export class FakeRepo implements OrdersRepo {
     return this.tx().countOccupied(eventId, now);
   }
 
+  async findEventById(id: string): Promise<EventRow | null> {
+    return this.events.get(id) ?? null;
+  }
+
+  async listEvents(): Promise<EventRow[]> {
+    const t = (e: EventRow) => (e.startsAt ? e.startsAt.getTime() : Number.POSITIVE_INFINITY);
+    return [...this.events.values()].sort((a, b) => t(a) - t(b));
+  }
+
   async findPassByOrderId(orderId: string): Promise<Pass | null> {
     const p = [...this.passes.values()].find((x) => x.orderId === orderId);
     return p ? { ...p } : null;
@@ -112,18 +121,23 @@ export class FakeRepo implements OrdersRepo {
     return byQr ? { ...byQr } : null;
   }
 
-  async listOrders(): Promise<AdminOrderRow[]> {
-    return [...this.orders.values()].map((order) => ({
+  async listOrders(eventId: string): Promise<AdminOrderRow[]> {
+    return [...this.orders.values()].filter((o) => o.eventId === eventId).map((order) => ({
       order: { ...order },
       usedAt: [...this.passes.values()].find((p) => p.orderId === order.id)?.usedAt ?? null,
     }));
   }
 
-  async redeem(token: string, now: Date): Promise<RedeemResult> {
+  async redeem(token: string, eventId: string, now: Date): Promise<RedeemResult> {
     const pass = [...this.passes.values()].find((p) => p.token === token);
     if (!pass) return { kind: "NOT_FOUND" };
     const order = this.orders.get(pass.orderId);
-    if (!order || order.status !== "paid") return { kind: "NOT_PAID" };
+    if (!order) return { kind: "NOT_FOUND" };
+    if (order.eventId !== eventId) {
+      const ev = this.events.get(order.eventId);
+      return { kind: "WRONG_EVENT", eventName: ev?.name ?? "otro taller", startsAt: ev?.startsAt ?? null };
+    }
+    if (order.status !== "paid") return { kind: "NOT_PAID" };
     if (pass.usedAt) return { kind: "ALREADY_USED", usedAt: pass.usedAt };
     pass.usedAt = now;
     return { kind: "OK", buyer: order.buyerName };

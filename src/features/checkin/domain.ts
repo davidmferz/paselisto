@@ -1,8 +1,20 @@
 import type { Order, Pass, RedeemResult } from "@/shared/ports";
 
-/** Maps the outcome of an atomic redeem UPDATE + follow-up lookup to a RedeemResult. */
-export function mapRedeem(i: { redeemed: boolean; pass: Pass | null; order: Order | null }): RedeemResult {
+/**
+ * Maps the outcome of an atomic redeem UPDATE + follow-up lookup to a RedeemResult.
+ * `event` is the event the pass's order belongs to (used only for WRONG_EVENT).
+ */
+export function mapRedeem(i: {
+  redeemed: boolean;
+  pass: Pass | null;
+  order: Order | null;
+  expectedEventId: string;
+  event: { name: string; startsAt?: Date | null } | null;
+}): RedeemResult {
   if (!i.pass || !i.order) return { kind: "NOT_FOUND" };
+  if (i.order.eventId !== i.expectedEventId) {
+    return { kind: "WRONG_EVENT", eventName: i.event?.name ?? "otro taller", startsAt: i.event?.startsAt ?? null };
+  }
   if (i.order.status !== "paid") return { kind: "NOT_PAID" };
   if (i.redeemed) return { kind: "OK", buyer: i.order.buyerName };
   return { kind: "ALREADY_USED", usedAt: i.pass.usedAt as Date };

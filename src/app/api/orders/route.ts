@@ -1,6 +1,5 @@
 import { createOrder } from "@/features/checkout/use-cases";
 import { getCheckoutDeps } from "@/shared/container";
-import { getConfig } from "@/shared/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +12,8 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "JSON inválido" }, { status: 400 });
   }
   try {
-    const slug = typeof body.slug === "string" && body.slug ? body.slug : getConfig().event.slug;
+    // No default event: the buyer must name an existing one (createOrder enforces it).
+    const slug = typeof body.slug === "string" ? body.slug : "";
     const r = await createOrder(getCheckoutDeps(), { slug, name: body.name, email: body.email });
     switch (r.kind) {
       case "ok":
@@ -21,6 +21,8 @@ export async function POST(req: Request): Promise<Response> {
           { orderId: r.orderId, qrString: r.qrString, expiresAt: r.expiresAt.toISOString() },
           { status: 201 },
         );
+      case "event_required":
+        return Response.json({ error: "Falta el evento", code: "event_required" }, { status: 400 });
       case "invalid":
         return Response.json({ error: "Revisa tu nombre y correo", code: "invalid" }, { status: 400 });
       case "event_not_found":

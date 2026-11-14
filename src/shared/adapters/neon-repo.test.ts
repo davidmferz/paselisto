@@ -35,10 +35,20 @@ describe("neon-repo row mapping", () => {
     });
   });
 
-  it("maps an event row", () => {
+  it("maps an event row (legacy columns null)", () => {
     expect(mapEventRow({ id: "e", slug: "s", name: "N", price_cents: 100, capacity: 5 })).toEqual({
       id: "e", slug: "s", name: "N", priceCents: 100, capacity: 5,
+      description: null, startsAt: null, venue: null, contactEmail: null, createdAt: null,
     });
+  });
+
+  it("maps the extended event columns", () => {
+    expect(
+      mapEventRow({
+        id: "e", slug: "s", name: "N", price_cents: 100, capacity: 5,
+        description: "d", starts_at: d, venue: "V", contact_email: "c@x.mx", created_at: d,
+      }),
+    ).toMatchObject({ description: "d", startsAt: d, venue: "V", contactEmail: "c@x.mx", createdAt: d });
   });
 
   it("builds a SET clause from a partial patch with snake_case columns", () => {
@@ -52,10 +62,14 @@ describe("neon-repo row mapping", () => {
     expect(orderPatchToSet({ status: undefined }).sql).toBe("");
   });
 
-  it("maps redeem rows: ok / already used / not paid", () => {
-    expect(mapRedeemRow({ buyer_name: "Ana", status: "paid", used_at: d }, true)).toEqual({ kind: "OK", buyer: "Ana" });
-    expect(mapRedeemRow({ buyer_name: "Ana", status: "paid", used_at: d }, false)).toEqual({ kind: "ALREADY_USED", usedAt: d });
-    expect(mapRedeemRow({ buyer_name: "Ana", status: "review", used_at: null }, false)).toEqual({ kind: "NOT_PAID" });
-    expect(mapRedeemRow(null, false)).toEqual({ kind: "NOT_FOUND" });
+  it("maps redeem rows: ok / already used / not paid / wrong event", () => {
+    const row = { buyer_name: "Ana", status: "paid", used_at: d, event_id: "e1", event_name: "A", starts_at: d };
+    expect(mapRedeemRow(row, true, "e1")).toEqual({ kind: "OK", buyer: "Ana" });
+    expect(mapRedeemRow(row, false, "e1")).toEqual({ kind: "ALREADY_USED", usedAt: d });
+    expect(mapRedeemRow({ ...row, status: "review", used_at: null }, false, "e1")).toEqual({ kind: "NOT_PAID" });
+    expect(mapRedeemRow(null, false, "e1")).toEqual({ kind: "NOT_FOUND" });
+    expect(mapRedeemRow({ ...row, used_at: null }, false, "e2")).toEqual({
+      kind: "WRONG_EVENT", eventName: "A", startsAt: d,
+    });
   });
 });

@@ -3,6 +3,7 @@ export type ScanOutcome =
   | { kind: "ALREADY_USED"; usedAt: string }
   | { kind: "NOT_FOUND" }
   | { kind: "NOT_PAID" }
+  | { kind: "WRONG_EVENT"; eventName: string; startsAt: string | null }
   | { kind: "ERROR" };
 
 export type ScanState = { phase: "idle" } | { phase: "validating" } | { phase: "result"; outcome: ScanOutcome };

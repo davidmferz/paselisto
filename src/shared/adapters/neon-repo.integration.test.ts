@@ -42,9 +42,44 @@ describe.skipIf(!url)("neon-repo integration (real DB)", () => {
     });
     expect([first, second]).toEqual([true, false]);
 
-    const results = await Promise.all([repo.redeem(token, new Date()), repo.redeem(token, new Date())]);
+    const results = await Promise.all([repo.redeem(token, eventId, new Date()), repo.redeem(token, eventId, new Date())]);
     expect(results.filter((r) => r.kind === "OK")).toHaveLength(1);
     expect(results.filter((r) => r.kind === "ALREADY_USED")).toHaveLength(1);
-    expect((await repo.redeem("nope", new Date())).kind).toBe("NOT_FOUND");
+    expect((await repo.redeem("nope", eventId, new Date())).kind).toBe("NOT_FOUND");
+  });
+
+  it("scanner isolation: a pass scanned at another event is WRONG_EVENT and stays unused", async () => {
+    const otherId = `test-${randomUUID()}`;
+    const oid = randomUUID();
+    const tok = `tok-${randomUUID()}`;
+    const pool = new Pool({ connectionString: url });
+    try {
+      await pool.query(readFileSync("db/schema.sql", "utf8"));
+      await pool.query("insert into events(id,slug,name,price_cents,capacity) values($1,$1,'Otro',1,2)", [otherId]);
+      const now = new Date();
+      await pool.query(
+        `insert into orders(id,event_id,buyer_name,buyer_email,amount_cents,status,expires_at,paid_at)
+         values($1,$2,'Ana','a@x.mx',1,'paid',$3,$3)`,
+        [oid, eventId, now],
+      );
+      await pool.query("insert into passes(id,order_id,token) values($1,$2,$3)", [randomUUID(), oid, tok]);
+      const wrong = await repo.redeem(tok, otherId, new Date());
+      expect(wrong).toMatchObject({ kind: "WRONG_EVENT" });
+      const { rows } = await pool.query("select used_at from passes where token=$1", [tok]);
+      expect(rows[0].used_at).toBeNull();
+      expect((await repo.redeem(tok, eventId, new Date())).kind).toBe("OK");
+    } finally {
+      await pool.query("delete from passes where order_id=$1", [oid]);
+      await pool.query("delete from orders where id=$1", [oid]);
+      await pool.query("delete from events where id=$1", [otherId]);
+      await pool.end();
+    }
+  });
+
+  it("listOrders filters by event before the limit; listEvents/findEventById work", async () => {
+    const rows = await repo.listOrders(eventId);
+    expect(rows.every((r) => r.order.eventId === eventId)).toBe(true);
+    expect((await repo.findEventById(eventId))?.id).toBe(eventId);
+    expect((await repo.listEvents()).some((e) => e.id === eventId)).toBe(true);
   });
 });

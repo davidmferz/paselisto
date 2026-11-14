@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { FALLBACK_AFTER_MS, createOrder, getEventView, getOrderStatus } from "./use-cases";
+import { FALLBACK_AFTER_MS, createOrder, getCalendarInfo, getEventView, getOrderEventView, getOrderStatus } from "./use-cases";
 import { applyPayment } from "@/features/webhook/handle-payment";
 import { FakeClock, FakePey, FakeRepo } from "@/test/fakes";
 
@@ -84,10 +84,66 @@ describe("createOrder", () => {
   });
 });
 
+describe("createOrder explicit event (no silent default)", () => {
+  it("blank slug -> event_required, nothing is created", async () => {
+    expect((await createOrder(deps(), { slug: "", ...buyer(1) })).kind).toBe("event_required");
+    expect((await createOrder(deps(), { slug: "   ", ...buyer(1) })).kind).toBe("event_required");
+    expect(repo.orders.size).toBe(0);
+  });
+});
+
+describe("order -> event resolution", () => {
+  const STARTS = new Date("2026-11-21T17:00:00Z");
+  beforeEach(() => {
+    repo.seedEvent({ id: "ev2", slug: "otro", name: "Otro taller", priceCents: 100, capacity: 5, startsAt: STARTS, venue: "Estudio X", contactEmail: "hola@x.mx" });
+  });
+
+  it("getOrderStatus returns the order's own event (not a global one)", async () => {
+    const r = await createOrder(deps(), { slug: "otro", ...buyer(1) });
+    if (r.kind !== "ok") throw new Error("setup");
+    const s = await getOrderStatus(deps(), r.orderId);
+    expect(s).toMatchObject({
+      kind: "found",
+      event: { slug: "otro", name: "Otro taller", startsAt: STARTS, venue: "Estudio X", contact: "hola@x.mx" },
+    });
+  });
+
+  it("getOrderEventView resolves by order id, null when unknown", async () => {
+    const r = await createOrder(deps(), { slug: "fiesta", ...buyer(1) });
+    if (r.kind !== "ok") throw new Error("setup");
+    expect(await getOrderEventView(repo, r.orderId)).toMatchObject({ slug: "fiesta", name: "Fiesta", startsAt: null, venue: null, contact: null });
+    expect(await getOrderEventView(repo, "00000000-0000-4000-8000-000000000000")).toBeNull();
+  });
+
+  it("getCalendarInfo: only paid orders with a known startsAt", async () => {
+    const r = await createOrder(deps(), { slug: "otro", ...buyer(1) });
+    if (r.kind !== "ok") throw new Error("setup");
+    expect(await getCalendarInfo(repo, r.orderId)).toBeNull(); // pending
+    await applyPayment(
+      { repo, clock },
+      { source: "webhook", type: "t", payload: {}, orderId: r.orderId, peyQrId: "qr_1", amountCents: 100, webhookId: "w1" },
+    );
+    const info = await getCalendarInfo(repo, r.orderId);
+    expect(info).toMatchObject({ event: { slug: "otro" }, orderId: r.orderId });
+    expect(info?.passToken).toBeTruthy();
+    // event without startsAt -> null
+    const r2 = await createOrder(deps(), { slug: "fiesta", ...buyer(2) });
+    if (r2.kind !== "ok") throw new Error("setup");
+    await applyPayment(
+      { repo, clock },
+      { source: "webhook", type: "t", payload: {}, orderId: r2.orderId, peyQrId: "qr_2", amountCents: 15000, webhookId: "w2" },
+    );
+    expect(await getCalendarInfo(repo, r2.orderId)).toBeNull();
+  });
+});
+
 describe("getEventView", () => {
   it("returns event with spots left, null for unknown slug", async () => {
     await createOrder(deps(), { slug: "fiesta", ...buyer(1) });
+    repo.seedEvent({ ...EVENT, description: "Desc", venue: "Sede", contactEmail: "c@x.mx", startsAt: new Date("2026-11-21T17:00:00Z") });
     const v = await getEventView(deps(), "fiesta");
+    expect(v).toMatchObject({ description: "Desc", venue: "Sede", contact: "c@x.mx" });
+    expect(v?.startsAt?.toISOString()).toBe("2026-11-21T17:00:00.000Z");
     expect(v).toMatchObject({ name: "Fiesta", priceCents: 15000, spotsLeft: 1 });
     expect(await getEventView(deps(), "nope")).toBeNull();
   });

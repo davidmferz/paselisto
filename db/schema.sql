@@ -7,6 +7,13 @@ create table if not exists events (
   capacity int not null
 );
 
+-- Multi-event fields (additive, idempotent).
+alter table events add column if not exists description text;
+alter table events add column if not exists starts_at timestamptz;
+alter table events add column if not exists venue text;
+alter table events add column if not exists contact_email text;
+alter table events add column if not exists created_at timestamptz default now();
+
 create table if not exists orders (
   id uuid primary key,
   event_id text not null references events(id),

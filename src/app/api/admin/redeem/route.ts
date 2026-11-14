@@ -9,14 +9,18 @@ export async function POST(req: Request): Promise<Response> {
   const denied = await requireAdminApi();
   if (denied) return denied;
   let token = "";
+  let eventId = "";
   try {
-    const body = (await req.json()) as { token?: unknown };
+    const body = (await req.json()) as { token?: unknown; eventId?: unknown };
     if (typeof body.token === "string") token = body.token;
+    if (typeof body.eventId === "string") eventId = body.eventId.trim();
   } catch {
-    /* malformed body -> NOT_FOUND below */
+    /* malformed body -> rejected below */
   }
+  // The scanned event is mandatory: without it a pass could be consumed at the wrong workshop.
+  if (!eventId) return Response.json({ error: "eventId required" }, { status: 400 });
   try {
-    const r = await redeemToken(getRepo(), getClock(), token);
+    const r = await redeemToken(getRepo(), getClock(), token, eventId);
     return Response.json(r, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     console.error("admin redeem failure", err instanceof Error ? err.message : err);
