@@ -43,3 +43,17 @@ describe("fakes", () => {
     expect(await repo.findEventById("zzz")).toBeNull();
   });
 });
+
+describe("FakeRepo pass email claim + findPassByToken", () => {
+  it("claims once, releases, and finds a pass by token", async () => {
+    const { FakeRepo } = await import("./fakes");
+    const r = new FakeRepo();
+    expect(await r.claimPassEmail("o1")).toBe(true);
+    expect(await r.claimPassEmail("o1")).toBe(false);
+    await r.releasePassEmail("o1");
+    expect(await r.claimPassEmail("o1")).toBe(true);
+    r.passes.set("p", { id: "p", orderId: "o1", token: "t", usedAt: null });
+    expect(await r.findPassByToken("t")).toMatchObject({ orderId: "o1" });
+    expect(await r.findPassByToken("zzz")).toBeNull();
+  });
+});

@@ -1,4 +1,4 @@
-import type { AdminOrderRow, Clock, EventRow, InsertEventResult, Order, OrdersRepo, Pass, PeyClient, RedeemResult, Tx } from "@/shared/ports";
+import type { AdminOrderRow, Clock, EventRow, InsertEventResult, Mailer, Order, OrdersRepo, Pass, PassEmailMessage, PeyClient, RedeemResult, Tx } from "@/shared/ports";
 
 export class FakeClock implements Clock {
   constructor(private t: Date = new Date("2026-01-01T00:00:00Z")) {}
@@ -30,7 +30,25 @@ export class FakePey implements PeyClient {
   }
 }
 
+export class FakeMailer implements Mailer {
+  sent: PassEmailMessage[] = [];
+  failNext = 0;
+  skip = false;
+  async sendPassEmail(msg: PassEmailMessage) {
+    if (this.failNext > 0) {
+      this.failNext--;
+      throw new Error("mailer 503");
+    }
+    if (this.skip) return { skipped: true as const };
+    this.sent.push(msg);
+    return { id: `em_${this.sent.length}` };
+  }
+}
+
 export class FakeRepo implements OrdersRepo {
+  /** orderId -> claim time (mirrors orders.email_sent_at). */
+  emailSentAt = new Map<string, Date>();
+
   events = new Map<string, EventRow>();
   orders = new Map<string, Order>();
   passes = new Map<string, Pass>();
@@ -79,6 +97,22 @@ export class FakeRepo implements OrdersRepo {
   async findEventByRequestKey(key: string): Promise<EventRow | null> {
     const e = [...this.events.values()].find((x) => x.createdByRequest === key);
     return e ? { ...e } : null;
+  }
+
+  async findPassByToken(token: string): Promise<Pass | null> {
+    const p = [...this.passes.values()].find((x) => x.token === token);
+    return p ? { ...p } : null;
+  }
+
+  async claimPassEmail(orderId: string): Promise<boolean> {
+    // Synchronous check+write == atomic, like the conditional UPDATE.
+    if (this.emailSentAt.has(orderId)) return false;
+    this.emailSentAt.set(orderId, new Date());
+    return true;
+  }
+
+  async releasePassEmail(orderId: string): Promise<void> {
+    this.emailSentAt.delete(orderId);
   }
 
   async findPassByOrderId(orderId: string): Promise<Pass | null> {

@@ -268,6 +268,38 @@ export function createNeonRepo(connectionString: string): OrdersRepo {
       }
     },
 
+    async findPassByToken(token: string): Promise<Pass | null> {
+      const pool = new Pool({ connectionString });
+      try {
+        const { rows } = await pool.query("SELECT * FROM passes WHERE token = $1", [token]);
+        return rows[0] ? mapPassRow(rows[0]) : null;
+      } finally {
+        await pool.end();
+      }
+    },
+
+    async claimPassEmail(orderId: string): Promise<boolean> {
+      const pool = new Pool({ connectionString });
+      try {
+        const r = await pool.query(
+          "UPDATE orders SET email_sent_at = now() WHERE id = $1 AND email_sent_at IS NULL RETURNING id",
+          [orderId],
+        );
+        return (r.rowCount ?? 0) > 0;
+      } finally {
+        await pool.end();
+      }
+    },
+
+    async releasePassEmail(orderId: string): Promise<void> {
+      const pool = new Pool({ connectionString });
+      try {
+        await pool.query("UPDATE orders SET email_sent_at = NULL WHERE id = $1", [orderId]);
+      } finally {
+        await pool.end();
+      }
+    },
+
     async findEventById(id: string): Promise<EventRow | null> {
       const pool = new Pool({ connectionString });
       try {

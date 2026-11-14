@@ -250,3 +250,67 @@ describe("applyPayment", () => {
     expect(r.kind).toBe("unknown_order");
   });
 });
+
+describe("applyPayment onPaid hook (post-commit notification)", () => {
+  async function setup() {
+    const repo = new FakeRepo();
+    repo.seedEvent(EVENT);
+    repo.orders.set("ord-1", order());
+    const calls: string[] = [];
+    const clock = new FakeClock(new Date("2026-01-01T00:05:00Z"));
+    return { repo, clock, calls, onPaid: async (id: string) => void calls.push(id) };
+  }
+  const input = (over: Partial<Parameters<typeof applyPayment>[1]> = {}) => ({
+    source: "webhook" as const, type: "t", payload: {}, orderId: "ord-1", amountCents: 1, webhookId: "w1", ...over,
+  });
+
+  it("fires exactly once, after the transaction, on pending -> paid (webhook)", async () => {
+    const { repo, clock, calls, onPaid } = await setup();
+    let sawPassAtCall = false;
+    const hook = async (id: string) => {
+      sawPassAtCall = (await repo.findPassByOrderId(id)) !== null && repo.orders.get(id)!.status === "paid";
+      await onPaid(id);
+    };
+    await applyPayment({ repo, clock, onPaid: hook }, input());
+    expect(calls).toEqual(["ord-1"]);
+    expect(sawPassAtCall).toBe(true);
+  });
+
+  it("fires on the polling path too", async () => {
+    const { repo, clock, calls, onPaid } = await setup();
+    await applyPayment({ repo, clock, onPaid }, input({ source: "poll", webhookId: undefined }));
+    expect(calls).toEqual(["ord-1"]);
+  });
+
+  it("does NOT fire on duplicate, noop, review or unknown order", async () => {
+    const { repo, clock, calls, onPaid } = await setup();
+    await applyPayment({ repo, clock, onPaid }, input());
+    calls.length = 0;
+    await applyPayment({ repo, clock, onPaid }, input()); // duplicate
+    await applyPayment({ repo, clock, onPaid }, input({ webhookId: "w2" })); // noop (already paid)
+    await applyPayment({ repo, clock, onPaid }, input({ orderId: "nope", webhookId: "w3" })); // unknown
+    repo.orders.set("ord-2", order({ id: "ord-2", peyQrId: "qr_2" }));
+    await applyPayment({ repo, clock, onPaid }, input({ orderId: "ord-2", amountCents: 999, webhookId: "w4" })); // review
+    expect(calls).toEqual([]);
+  });
+
+  it("a throwing hook never fails or rolls back the payment", async () => {
+    const { repo, clock } = await setup();
+    const r = await applyPayment({ repo, clock, onPaid: async () => { throw new Error("resend down"); } }, input());
+    expect(r).toEqual({ kind: "paid", orderId: "ord-1" });
+    expect(repo.orders.get("ord-1")!.status).toBe("paid");
+    expect(await repo.findPassByOrderId("ord-1")).not.toBeNull();
+  });
+
+  it("is not invoked when the transaction rolls back", async () => {
+    const { repo, clock, calls, onPaid } = await setup();
+    const orig = repo.withEventLock.bind(repo);
+    repo.withEventLock = (async (id: string, fn: (tx: Tx) => Promise<unknown>) =>
+      orig(id, async (tx) => {
+        await fn(tx);
+        throw new Error("commit failed");
+      })) as typeof repo.withEventLock;
+    await expect(applyPayment({ repo, clock, onPaid }, input())).rejects.toThrow();
+    expect(calls).toEqual([]);
+  });
+});

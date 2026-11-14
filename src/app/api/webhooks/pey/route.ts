@@ -2,6 +2,7 @@ import { handlePeyWebhook } from "@/features/webhook/handle-payment";
 import { systemClock } from "@/shared/adapters/clock";
 import { createNeonRepo } from "@/shared/adapters/neon-repo";
 import { getConfig } from "@/shared/config";
+import { getOnPaid } from "@/shared/container";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,12 +12,14 @@ export async function POST(req: Request): Promise<Response> {
   const raw = await req.text();
   try {
     const cfg = getConfig();
+    const repo = createNeonRepo(cfg.databaseUrl);
     const res = await handlePeyWebhook({
       raw,
       headers: req.headers,
       secret: cfg.pey.webhookSecret,
-      repo: createNeonRepo(cfg.databaseUrl),
+      repo,
       clock: systemClock,
+      onPaid: getOnPaid(repo),
     });
     return new Response(res.body, { status: res.status });
   } catch (err) {

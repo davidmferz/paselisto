@@ -82,4 +82,14 @@ describe.skipIf(!url)("neon-repo integration (real DB)", () => {
     expect((await repo.findEventById(eventId))?.id).toBe(eventId);
     expect((await repo.listEvents()).some((e) => e.id === eventId)).toBe(true);
   });
+
+  it("claimPassEmail is atomic (one winner), releasable; findPassByToken works", async () => {
+    // depends on the order/pass created by the first test in this file
+    const wins = await Promise.all([repo.claimPassEmail(orderId), repo.claimPassEmail(orderId)]);
+    expect(wins.filter(Boolean)).toHaveLength(1);
+    await repo.releasePassEmail(orderId);
+    expect(await repo.claimPassEmail(orderId)).toBe(true);
+    expect((await repo.findPassByToken(token))?.orderId).toBe(orderId);
+    expect(await repo.findPassByToken("nope")).toBeNull();
+  });
 });

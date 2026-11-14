@@ -32,6 +32,22 @@ export type ApplyInput = {
  * Any throw rolls back everything (including the dedupe row) so pey can retry.
  */
 export async function applyPayment(
+  deps: { repo: OrdersRepo; clock: Clock; onPaid?: (orderId: string) => Promise<void> },
+  i: ApplyInput,
+): Promise<ApplyResult> {
+  const result = await applyPaymentTx(deps, i);
+  // Strictly AFTER commit; a failing side effect (e.g. email) must never undo or fail the payment.
+  if (result.kind === "paid" && deps.onPaid) {
+    try {
+      await deps.onPaid(result.orderId);
+    } catch (err) {
+      console.error("onPaid hook failed", err instanceof Error ? err.message : err);
+    }
+  }
+  return result;
+}
+
+async function applyPaymentTx(
   deps: { repo: OrdersRepo; clock: Clock },
   i: ApplyInput,
 ): Promise<ApplyResult> {
@@ -92,6 +108,7 @@ export async function handlePeyWebhook(i: {
   secret: string;
   repo: OrdersRepo;
   clock: Clock;
+  onPaid?: (orderId: string) => Promise<void>;
   log?: (msg: string, data?: unknown) => void;
 }): Promise<WebhookResponse> {
   const log = i.log ?? ((m, d) => console.log(m, d ?? ""));
@@ -128,7 +145,7 @@ export async function handlePeyWebhook(i: {
 
   try {
     const result = await applyPayment(
-      { repo: i.repo, clock: i.clock },
+      { repo: i.repo, clock: i.clock, onPaid: i.onPaid },
       {
         webhookId,
         source: "webhook",

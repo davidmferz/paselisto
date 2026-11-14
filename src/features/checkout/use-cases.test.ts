@@ -279,3 +279,16 @@ describe("getOrderStatus", () => {
     expect(await getOrderStatus(deps(), id, { forceCheck: true })).toMatchObject({ status: "expired" });
   });
 });
+
+describe("getOrderStatus onPaid (polling path)", () => {
+  it("passes onPaid to applyPayment so the polling fallback also notifies, once", async () => {
+    const r = await createOrder(deps(), { slug: "fiesta", ...buyer(1) });
+    if (r.kind !== "ok") throw new Error("setup");
+    pey.qrs.get("qr_1")!.status = "PAID";
+    const calls: string[] = [];
+    const d = { ...deps(), onPaid: async (id: string) => void calls.push(id) };
+    await getOrderStatus(d, r.orderId, { forceCheck: true });
+    await getOrderStatus(d, r.orderId, { forceCheck: true });
+    expect(calls).toEqual([r.orderId]);
+  });
+});
