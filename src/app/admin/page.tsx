@@ -12,7 +12,7 @@ export default async function AdminPage() {
       <header className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Panel</h1>
         <div className="flex items-center gap-2">
-          <Link href="/admin/scan" className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground">
+          <Link href="/admin/scan" className="inline-flex h-11 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/60">
             Escanear
           </Link>
           <LogoutButton />

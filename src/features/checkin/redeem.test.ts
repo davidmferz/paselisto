@@ -11,7 +11,7 @@ function seed(status: Order["status"] = "paid") {
   repo.orders.set("o1", {
     id: "o1", eventId: "e1", buyerName: "Ana", buyerEmail: "a@x.mx", amountCents: 1, status,
     channel: "qr", peyQrId: null, peyTransactionId: null, expiresAt: clock.now(),
-    paidAt: clock.now(), reviewReason: null, createdAt: clock.now(),
+    paidAt: clock.now(), reviewReason: null, confirmedVia: null, createdAt: clock.now(),
   });
   if (status === "paid") repo.passes.set("p1", { id: "p1", orderId: "o1", token: TOKEN, usedAt: null });
   return repo;

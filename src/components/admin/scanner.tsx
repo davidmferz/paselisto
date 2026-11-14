@@ -1,68 +1,85 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { initialScan, scanReducer, type ScanOutcome } from "@/features/checkin/scan-state";
 
-type Outcome =
-  | { kind: "OK"; buyer: string }
-  | { kind: "ALREADY_USED"; usedAt: string }
-  | { kind: "NOT_FOUND" }
-  | { kind: "NOT_PAID" }
-  | { kind: "ERROR" };
-
-function view(o: Outcome): { bg: string; title: string; sub?: string } {
+// Backgrounds chosen so white text is >= 4.5:1 (green-800 ~7:1, red-800 ~8:1, slate-800 ~12:1).
+function view(o: ScanOutcome): { bg: string; title: string; sub?: string } {
   switch (o.kind) {
     case "OK":
-      return { bg: "bg-green-600", title: "ACCESO OK", sub: o.buyer };
+      return { bg: "bg-green-800", title: "ACCESO OK", sub: o.buyer };
     case "ALREADY_USED":
       return {
-        bg: "bg-red-600",
+        bg: "bg-red-800",
         title: "RECHAZADO: ya usado",
         sub: `Usado a las ${new Date(o.usedAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`,
       };
     case "NOT_PAID":
-      return { bg: "bg-red-600", title: "RECHAZADO: pago no confirmado" };
+      return { bg: "bg-red-800", title: "RECHAZADO: pago no confirmado" };
     case "NOT_FOUND":
-      return { bg: "bg-red-600", title: "NO EXISTE", sub: "Código no encontrado" };
+      return { bg: "bg-red-800", title: "NO EXISTE", sub: "Código no encontrado" };
     default:
-      return { bg: "bg-slate-700", title: "ERROR", sub: "Reintentá" };
+      return { bg: "bg-slate-800", title: "ERROR", sub: "No se pudo validar. Reintenta." };
   }
 }
+
+const FOCUS = "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-600";
 
 export function Scanner() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const busyRef = useRef(false);
+  const phaseRef = useRef<"idle" | "validating" | "result">("idle");
+  const lastToken = useRef("");
+  const [state, dispatch] = useReducer(scanReducer, initialScan);
   const [code, setCode] = useState("");
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [camera, setCamera] = useState<"starting" | "on" | "off">("starting");
+  const [camera, setCamera] = useState<"starting" | "on" | "denied" | "off">("starting");
+  const [cameraTry, setCameraTry] = useState(0);
+
+  useEffect(() => {
+    phaseRef.current = state.phase;
+  }, [state.phase]);
 
   const redeem = useCallback(
-    async (token: string) => {
-      if (busyRef.current || !token.trim()) return;
-      busyRef.current = true;
+    async (token: string, fromManual = false) => {
+      const t = token.trim();
+      // Frozen/in-flight: ignore camera frames and duplicate submits.
+      if (phaseRef.current !== "idle" || !t) return;
+      phaseRef.current = "validating";
+      lastToken.current = t;
+      dispatch({ type: "submit" });
       try {
         const res = await fetch("/api/admin/redeem", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token: t }),
         });
-        if (res.status === 401) return router.replace("/admin/login");
-        setOutcome(res.ok ? ((await res.json()) as Outcome) : { kind: "ERROR" });
+        if (res.status === 401) {
+          dispatch({ type: "abort" });
+          return router.replace("/admin/login");
+        }
+        const outcome: ScanOutcome = res.ok ? ((await res.json()) as ScanOutcome) : { kind: "ERROR" };
+        phaseRef.current = "result";
+        dispatch({ type: "resolve", outcome });
+        if (fromManual && outcome.kind !== "ERROR") setCode(""); // keep typed code on error
       } catch {
-        setOutcome({ kind: "ERROR" });
-      } finally {
-        // brief cool-down so one QR in frame does not fire repeatedly
-        setTimeout(() => (busyRef.current = false), 1500);
+        phaseRef.current = "result";
+        dispatch({ type: "resolve", outcome: { kind: "ERROR" } });
       }
     },
     [router],
   );
 
+  const next = useCallback(() => {
+    phaseRef.current = "idle";
+    dispatch({ type: "next" });
+  }, []);
+
   useEffect(() => {
     let stop: (() => void) | undefined;
     let cancelled = false;
+    setCamera("starting");
     (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error("no camera api");
@@ -74,49 +91,86 @@ export function Scanner() {
         if (cancelled) return controls.stop();
         stop = () => controls.stop();
         setCamera("on");
-      } catch {
-        if (!cancelled) setCamera("off"); // denied / no camera: manual input still works
+      } catch (e) {
+        const name = (e as { name?: string })?.name;
+        if (!cancelled) setCamera(name === "NotAllowedError" || name === "SecurityError" ? "denied" : "off");
       }
     })();
     return () => {
       cancelled = true;
       stop?.();
     };
-  }, [redeem]);
+  }, [redeem, cameraTry]);
 
-  const v = outcome ? view(outcome) : null;
+  const v = state.phase === "result" ? view(state.outcome) : null;
+  const announce =
+    state.phase === "validating" ? "Validando" : v ? `${v.title}${v.sub ? `. ${v.sub}` : ""}` : "";
 
   return (
     <div className="flex flex-col gap-4">
+      <div aria-live="polite" role="status" className="sr-only">{announce}</div>
+
+      {state.phase === "validating" && (
+        <div className="flex min-h-40 w-full items-center justify-center rounded-xl bg-slate-800 p-4 text-center text-2xl font-bold text-white">
+          Validando…
+        </div>
+      )}
+
       {v && (
-        <button
-          type="button"
-          onClick={() => setOutcome(null)}
-          className={`${v.bg} flex min-h-40 w-full flex-col items-center justify-center gap-1 rounded-xl p-4 text-center text-white`}
-        >
+        <div className={`${v.bg} flex min-h-40 w-full flex-col items-center justify-center gap-1 rounded-xl p-4 text-center text-white`}>
           <span className="text-3xl font-extrabold leading-tight">{v.title}</span>
-          {v.sub && <span className="text-lg">{v.sub}</span>}
-          <span className="mt-2 text-xs opacity-80">Tocá para limpiar</span>
-        </button>
+          {v.sub && <span className="text-lg font-medium">{v.sub}</span>}
+        </div>
+      )}
+
+      {v && (
+        <div className="flex flex-col gap-2">
+          <Button type="button" onClick={next} className={`h-14 text-lg ${FOCUS}`} autoFocus>
+            Escanear siguiente
+          </Button>
+          {state.phase === "result" && state.outcome.kind === "ERROR" && (
+            <Button
+              type="button"
+              variant="outline"
+              className={`h-12 text-base ${FOCUS}`}
+              onClick={() => {
+                const t = lastToken.current;
+                next();
+                void redeem(t, true);
+              }}
+            >
+              Reintentar
+            </Button>
+          )}
+        </div>
       )}
 
       <div className="overflow-hidden rounded-xl bg-black">
         <video ref={videoRef} muted playsInline className={camera === "on" ? "aspect-square w-full object-cover" : "hidden"} />
         {camera !== "on" && (
-          <p className="p-6 text-center text-sm text-white">
-            {camera === "starting" ? "Iniciando cámara..." : "Cámara no disponible. Usá el código manual."}
-          </p>
+          <div className="flex flex-col items-center gap-3 p-6 text-center text-white">
+            <p className="text-base">
+              {camera === "starting" && "Iniciando cámara..."}
+              {camera === "denied" && "No tenemos permiso para usar la cámara. Actívalo en los ajustes del navegador y vuelve a intentar, o usa el código manual."}
+              {camera === "off" && "Cámara no disponible. Usa el código manual."}
+            </p>
+            {camera !== "starting" && (
+              <Button type="button" variant="secondary" className={`h-12 px-6 text-base ${FOCUS}`} onClick={() => setCameraTry((n) => n + 1)}>
+                Reintentar cámara
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void redeem(code).then(() => setCode(""));
+          void redeem(code, true);
         }}
         className="flex flex-col gap-2"
       >
-        <label className="text-sm font-medium" htmlFor="code">Código manual</label>
+        <label className="text-base font-medium" htmlFor="code">Código manual</label>
         <input
           id="code"
           value={code}
@@ -124,10 +178,12 @@ export function Scanner() {
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          placeholder="Pegá o escribí el código del pase"
-          className="h-12 rounded-md border bg-background px-3 text-base"
+          placeholder="Pega o escribe el código del pase"
+          className={`h-12 rounded-md border bg-background px-3 text-base ${FOCUS}`}
         />
-        <Button type="submit" size="lg" disabled={!code.trim()}>Validar</Button>
+        <Button type="submit" className={`h-12 text-base ${FOCUS}`} disabled={!code.trim() || state.phase !== "idle"}>
+          {state.phase === "validating" ? "Validando…" : "Validar"}
+        </Button>
       </form>
     </div>
   );
