@@ -4,7 +4,13 @@ export type Config = {
   organizerPassword: string;
   sessionSecret: string;
   appUrl: string;
-  event: { slug: string; name: string; priceCents: number; capacity: number };
+  event: { slug: string; name: string; priceCents: number; capacity: number;
+    /** Optional buyer-facing trust info (free text). */
+    date?: string;
+    venue?: string;
+    organizer?: string;
+    contact?: string;
+  };
 };
 
 type Env = Record<string, string | undefined>;
@@ -23,6 +29,8 @@ const REQUIRED = [
 ] as const;
 
 const DEFAULT_PEY_BASE_URL = "https://api.pey.mx";
+
+const optional = (v: string | undefined) => v?.trim() || undefined;
 
 function positiveInt(name: string, raw: string): number {
   if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
@@ -50,6 +58,10 @@ export function parseConfig(env: Env): Config {
       name: e.EVENT_NAME,
       priceCents: positiveInt("EVENT_PRICE_CENTS", e.EVENT_PRICE_CENTS),
       capacity: positiveInt("EVENT_CAPACITY", e.EVENT_CAPACITY),
+      date: optional(env.EVENT_DATE),
+      venue: optional(env.EVENT_VENUE),
+      organizer: optional(env.EVENT_ORGANIZER),
+      contact: optional(env.EVENT_CONTACT),
     },
   };
 }

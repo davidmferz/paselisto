@@ -22,19 +22,19 @@ export async function POST(req: Request): Promise<Response> {
           { status: 201 },
         );
       case "invalid":
-        return Response.json({ error: "Revisá tu nombre y email", code: "invalid" }, { status: 400 });
+        return Response.json({ error: "Revisa tu nombre y correo", code: "invalid" }, { status: 400 });
       case "event_not_found":
         return Response.json({ error: "Evento no encontrado", code: "event_not_found" }, { status: 404 });
       case "sold_out":
         return Response.json({ error: "Agotado", code: "sold_out" }, { status: 409 });
       case "pey_error":
         return Response.json(
-          { error: "Reintentá en unos segundos", code: "pey_error" },
+          { error: "Intenta de nuevo en unos segundos", code: "pey_error" },
           { status: 503 },
         );
     }
   } catch (err) {
     console.error("POST /api/orders failed", err instanceof Error ? err.message : err);
-    return Response.json({ error: "Reintentá en unos segundos", code: "internal" }, { status: 500 });
+    return Response.json({ error: "Intenta de nuevo en unos segundos", code: "internal" }, { status: 500 });
   }
 }

@@ -38,4 +38,31 @@ describe("parseConfig", () => {
     expect(() => parseConfig({ ...base, EVENT_PRICE_CENTS: "0" })).toThrow(/EVENT_PRICE_CENTS/);
     expect(() => parseConfig({ ...base, EVENT_CAPACITY: "abc" })).toThrow(/EVENT_CAPACITY/);
   });
+
+  it("event trust info is optional: absent -> undefined, blank -> undefined", () => {
+    const c = parseConfig(base);
+    expect(c.event.date).toBeUndefined();
+    expect(c.event.venue).toBeUndefined();
+    expect(c.event.organizer).toBeUndefined();
+    expect(c.event.contact).toBeUndefined();
+    const b = parseConfig({ ...base, EVENT_DATE: "  ", EVENT_VENUE: "" });
+    expect(b.event.date).toBeUndefined();
+    expect(b.event.venue).toBeUndefined();
+  });
+
+  it("reads and trims EVENT_DATE/VENUE/ORGANIZER/CONTACT", () => {
+    const c = parseConfig({
+      ...base,
+      EVENT_DATE: " Sábado 21 de noviembre, 11:00 ",
+      EVENT_VENUE: "Casa Taller",
+      EVENT_ORGANIZER: "Ana",
+      EVENT_CONTACT: "ana@x.mx",
+    });
+    expect(c.event).toMatchObject({
+      date: "Sábado 21 de noviembre, 11:00",
+      venue: "Casa Taller",
+      organizer: "Ana",
+      contact: "ana@x.mx",
+    });
+  });
 });
