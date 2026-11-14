@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { barPercents, initials, orderSubline } from "./panel-view";
+import { barPercents, initials, orderSubline, pillLabel } from "./panel-view";
+
+describe("pillLabel", () => {
+  it("maps admin statuses to Spanish wording", () => {
+    expect(pillLabel("paid")).toBe("Pagado");
+    expect(pillLabel("pending")).toBe("Pendiente");
+    expect(pillLabel("review")).toBe("En revisión");
+    expect(pillLabel("used")).toBe("Ingresó");
+    expect(pillLabel("expired")).toBe("Expirado");
+  });
+});
 
 describe("initials", () => {
   it("takes first letters of up to two words", () => {

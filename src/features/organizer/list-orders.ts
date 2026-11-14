@@ -17,7 +17,7 @@ export type AdminOrder = {
 export type Counters = { sold: number; reserved: number; available: number; entered: number; capacity: number };
 
 export type AdminOrdersView = {
-  event: { id: string; slug: string; name: string; capacity: number; startsAt: string | null };
+  event: { id: string; slug: string; name: string; capacity: number; startsAt: string | null; venue: string | null };
   orders: AdminOrder[];
   counts: Record<AdminStatus, number>;
   counters: Counters;
@@ -60,7 +60,7 @@ export async function listOrders(repo: OrdersRepo, clock: Clock, eventId: string
     };
   });
   return {
-    event: { id: event.id, slug: event.slug, name: event.name, capacity: event.capacity, startsAt: event.startsAt?.toISOString() ?? null },
+    event: { id: event.id, slug: event.slug, name: event.name, capacity: event.capacity, startsAt: event.startsAt?.toISOString() ?? null, venue: event.venue ?? null },
     orders,
     counts,
     counters: computeCounters(counts, event.capacity),

@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
-import { Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -63,7 +62,7 @@ export function BuyForm({ slug, price }: { slug: string; price: string }) {
           <Input
             id="buyer-name"
             ref={nameRef}
-            icon={<User />}
+            placeholder="Ana García"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
@@ -79,12 +78,12 @@ export function BuyForm({ slug, price }: { slug: string; price: string }) {
         </div>
         <div className="space-y-1.5">
           <label htmlFor="buyer-email" className="text-sm font-bold">
-            Correo electrónico
+            Correo
           </label>
           <Input
             id="buyer-email"
             ref={emailRef}
-            icon={<Mail />}
+            placeholder="ana@correo.com"
             type="email"
             inputMode="email"
             value={email}

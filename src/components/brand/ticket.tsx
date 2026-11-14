@@ -33,9 +33,19 @@ function Ticket({ eyebrow, title, meta, holder, code, children, className }: Tic
           <div className="rounded-[18px] bg-white p-6 text-[#12142B]">{children}</div>
         ) : null}
         {(holder || code) && (
-          <div className="flex w-full items-end justify-between gap-4">
-            {holder ? <span className="text-sm font-bold">{holder}</span> : <span />}
-            {code ? <span className="font-data text-sm opacity-80">{code}</span> : null}
+          <div className="flex w-full items-end justify-between gap-3">
+            {holder ? (
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-label opacity-60">Titular</span>
+                <span className="truncate text-sm font-bold">{holder}</span>
+              </div>
+            ) : <span />}
+            {code ? (
+              <div className="flex shrink-0 flex-col items-end gap-0.5">
+                <span className="text-label opacity-60">Código</span>
+                <span className="font-data text-xs">{code}</span>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

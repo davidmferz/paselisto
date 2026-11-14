@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Logo, Steps, Ticket } from "@/components/brand";
 import { StatusPill } from "@/components/ui/status-pill";
 import { formatAgo } from "@/features/checkout/copy";
+import { groupCode } from "@/shared/format";
 
 type Status = "pending" | "paid" | "review" | "expired";
 type OrderData = {
@@ -20,7 +21,7 @@ type OrderData = {
   qrString: string | null;
   calendar?: { icsUrl: string; googleUrl: string } | null;
 };
-type EventInfo = { slug: string; name: string; date: string | null; venue: string | null; contact: string | null };
+type EventInfo = { slug: string; name: string; date: string | null; meta: string; venue: string | null; contact: string | null };
 
 const POLL_MS = 2500;
 const REVIEW_POLL_MS = 10_000;
@@ -480,15 +481,15 @@ function PassBody({
     }
   }
 
-  const meta = [event.date, event.venue].filter(Boolean).join(" · ");
+  const meta = event.meta;
   return (
     <>
       <Ticket
-        eyebrow="Pase de entrada"
+        eyebrow="Pase de entrada · 1 persona"
         title={event.name}
         meta={meta || undefined}
         holder={holder}
-        code={<span ref={codeRef} className="select-all break-all">{token}</span>}
+        code={<span ref={codeRef} className="select-all whitespace-nowrap">{groupCode(token)}</span>}
       >
         {qr ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -512,22 +513,28 @@ function PassBody({
         {copied === "fail" && "No pudimos copiar. Mantén presionado el código para copiarlo."}
       </p>
       {calendar && (
-        <div className="flex flex-col gap-3">
-          <a
-            href={calendar.googleUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants({ variant: "secondary", size: "full" })}
-          >
-            <CalendarPlus /> Agregar a Google Calendar
-          </a>
-          <a href={calendar.icsUrl} className={buttonVariants({ variant: "secondary", size: "full" })}>
-            <CalendarPlus /> Agregar al calendario (iPhone/Outlook)
-          </a>
+        <div className="flex flex-col gap-2 rounded-[18px] bg-sunken p-3">
+          <p className="text-label text-muted-foreground">Agregar a tu calendario</p>
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={calendar.googleUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-line bg-surface px-3 text-sm font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-mango"
+            >
+              <CalendarPlus className="size-4" aria-hidden /> Google
+            </a>
+            <a
+              href={calendar.icsUrl}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-line bg-surface px-3 text-sm font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-mango"
+            >
+              <CalendarPlus className="size-4" aria-hidden /> iPhone/Outlook
+            </a>
+          </div>
         </div>
       )}
       <p className="rounded-[14px] bg-wait-soft p-3 text-sm font-bold text-wait">
-        No compartas este pase: solo permite una entrada.
+        No compartas este pase: permite una sola entrada. Pago verificado por CoDi vía pey.
       </p>
       <p className="text-sm text-muted-foreground">Muestra este QR en la entrada. Guarda esta página: es tu entrada.</p>
     </>

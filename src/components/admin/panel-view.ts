@@ -31,3 +31,9 @@ export function orderSubline(o: Pick<AdminOrder, "status" | "createdAt" | "usedA
       return "QR vencido";
   }
 }
+
+const PILL_LABELS = { paid: "Pagado", pending: "Pendiente", review: "En revisión", used: "Ingresó", expired: "Expirado" } as const;
+
+export function pillLabel(status: keyof typeof PILL_LABELS): string {
+  return PILL_LABELS[status];
+}

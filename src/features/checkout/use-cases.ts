@@ -8,7 +8,7 @@ export const ORDER_TTL_SEC = 900;
 /** Head start for the signed webhook before the polling fallback kicks in. */
 export const FALLBACK_AFTER_MS = 45_000;
 
-type Deps = { repo: OrdersRepo; pey: PeyClient; clock: Clock };
+type Deps = { repo: OrdersRepo; pey: PeyClient; clock: Clock; onPaid?: (orderId: string) => Promise<void> };
 
 export type CreateOrderResult =
   | { kind: "ok"; orderId: string; qrString: string; expiresAt: Date }
@@ -87,6 +87,7 @@ export type EventView = {
   startsAt: Date | null;
   venue: string | null;
   contact: string | null;
+  organizer: string | null;
 };
 
 export async function getEventView(
@@ -106,6 +107,7 @@ export async function getEventView(
     startsAt: event.startsAt ?? null,
     venue: event.venue ?? null,
     contact: event.contactEmail ?? null,
+    organizer: event.organizerName?.trim() || null,
   };
 }
 
@@ -179,7 +181,7 @@ export async function getOrderStatus(
       if ((await deps.pey.getQrStatus(order.peyQrId)) === "PAID") {
         // Same idempotent path as the webhook (no webhookId).
         await applyPayment(
-          { repo: deps.repo, clock: deps.clock },
+          { repo: deps.repo, clock: deps.clock, onPaid: deps.onPaid },
           {
             source: "poll",
             type: "poll.fallback",

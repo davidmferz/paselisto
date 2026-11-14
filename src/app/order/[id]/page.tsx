@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getOrderEventView } from "@/features/checkout/use-cases";
 import { getRepo } from "@/shared/container";
-import { formatEventDate, formatMxn } from "@/shared/format";
+import { eventShortMeta, formatEventDate, formatMxn } from "@/shared/format";
 import { OrderView } from "./order-view";
 
 export const runtime = "nodejs";
@@ -30,6 +30,7 @@ export default async function OrderPage({
         slug: event.slug,
         name: event.name,
         date: event.startsAt ? formatEventDate(event.startsAt) : null,
+        meta: eventShortMeta(event.startsAt, event.venue),
         venue: event.venue,
         contact: event.contact,
       }}

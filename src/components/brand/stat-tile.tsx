@@ -20,10 +20,10 @@ function StatTile({ label, value, tone = "default", className }: StatTileProps) 
   return (
     <div
       data-slot="stat-tile"
-      className={cn("flex flex-col gap-1 rounded-[24px] border p-4", tones[tone], className)}
+      className={cn("flex flex-col gap-1 rounded-[20px] border p-3 sm:rounded-[24px] sm:p-4", tones[tone], className)}
     >
-      <span className="text-label opacity-80">{label}</span>
-      <span className="font-data text-[28px] leading-none font-bold">{value}</span>
+      <span className="text-label text-[11px] leading-tight tracking-[0.04em] opacity-80 sm:text-xs sm:tracking-[0.08em]">{label}</span>
+      <span className="font-data text-2xl leading-none sm:text-[28px] font-bold">{value}</span>
     </div>
   )
 }

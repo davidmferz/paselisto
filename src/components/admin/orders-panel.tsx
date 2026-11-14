@@ -9,7 +9,8 @@ import type { AdminOrdersView, AdminStatus } from "@/features/organizer/list-ord
 import { StatStrip } from "@/components/brand";
 import { StatusPill } from "@/components/ui/status-pill";
 import { buttonVariants } from "@/components/ui/button";
-import { barPercents, initials, orderSubline } from "./panel-view";
+import { eventShortMeta } from "@/shared/format";
+import { barPercents, initials, orderSubline, pillLabel } from "./panel-view";
 
 const POLL_MS = 3000;
 
@@ -71,7 +72,7 @@ export function OrdersPanel({ eventSlug }: { eventSlug: string }) {
           {error ? "Sin conexión, reintentando…" : `En vivo · ${updatedAt ? agoLabel(now - updatedAt) : ""}`}
         </p>
         <h2 className="text-h1">{view.event.name}</h2>
-        <p className="text-sm text-muted-foreground">Capacidad {c.capacity}</p>
+        <p className="text-sm text-muted-foreground">{eventShortMeta(view.event.startsAt ? new Date(view.event.startsAt) : null, view.event.venue) || `Capacidad ${c.capacity}`}</p>
       </div>
 
       <div className="flex flex-col gap-4 rounded-[24px] bg-ink p-5 text-on-ink">
@@ -97,7 +98,7 @@ export function OrdersPanel({ eventSlug }: { eventSlug: string }) {
       </div>
 
       <StatStrip
-        className="sm:grid-cols-3"
+        className="grid-cols-3 gap-2"
         stats={[
           { label: "Reservados", value: c.reserved, tone: "wait" },
           { label: "En revisión", value: view.counts.review, tone: "no" },
@@ -105,6 +106,7 @@ export function OrdersPanel({ eventSlug }: { eventSlug: string }) {
         ]}
       />
 
+      <h2 className="text-h2 -mb-3">Pedidos</h2>
       {visible.length === 0 ? (
         <p className="text-base text-muted-foreground">Todavía no hay órdenes.</p>
       ) : (
@@ -126,7 +128,7 @@ export function OrdersPanel({ eventSlug }: { eventSlug: string }) {
                   <p className="text-xs font-bold text-no">{reviewReasonView(o.reviewReason).title}</p>
                 )}
               </div>
-              <StatusPill status={PILL[o.status]} label={o.status === "expired" ? "Expirado" : o.status === "review" ? "En revisión" : undefined} className="shrink-0" />
+              <StatusPill status={PILL[o.status]} label={pillLabel(o.status)} className="shrink-0" />
             </li>
           ))}
         </ul>
