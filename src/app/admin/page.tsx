@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdminPage } from "@/features/organizer/server-auth";
 import { resolveEvent } from "@/features/organizer/resolve-event";
 import { OrdersPanel } from "@/components/admin/orders-panel";
+import { ArrowLeft } from "lucide-react";
 import { LogoutButton } from "@/components/admin/logout-button";
 import { getRepo } from "@/shared/container";
 
@@ -15,8 +16,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const [event, events] = await Promise.all([resolveEvent(repo, typeof ref === "string" ? ref : undefined), repo.listEvents()]);
   if (!event) {
     return (
-      <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-4 p-4">
-        <h1 className="text-xl font-bold">Panel</h1>
+      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col gap-6 px-6 py-6">
+        <h1 className="text-h1">Panel</h1>
         <p className="text-base text-muted-foreground">
           {typeof ref === "string" && ref ? "No encontramos ese taller." : "Todavía no hay talleres."}
         </p>
@@ -25,18 +26,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     );
   }
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-4 p-4">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col gap-6 px-6 py-6">
       <header className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-bold">Panel</h1>
-          <p className="truncate text-sm text-muted-foreground">{event.name}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/admin/scan?event=${encodeURIComponent(event.slug)}`} className="inline-flex h-11 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/60">
-            Escanear
-          </Link>
-          <LogoutButton />
-        </div>
+        <Link
+          href="/admin/talleres"
+          className="inline-flex h-12 items-center gap-2 rounded-[14px] pr-3 text-sm font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-mango"
+        >
+          <ArrowLeft className="size-5" aria-hidden /> Mis talleres
+        </Link>
+        <LogoutButton />
       </header>
       {events.length > 1 && (
         <nav aria-label="Talleres" className="flex flex-wrap gap-2">
@@ -45,7 +43,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               key={e.id}
               href={`/admin?event=${encodeURIComponent(e.slug)}`}
               aria-current={e.id === event.id ? "page" : undefined}
-              className={`inline-flex h-11 items-center rounded-full border px-4 text-sm ${e.id === event.id ? "bg-primary font-semibold text-primary-foreground" : ""}`}
+              className={`inline-flex h-12 items-center rounded-full border px-4 text-sm font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-mango ${e.id === event.id ? "border-transparent bg-ink text-on-ink" : "border-line bg-surface"}`}
             >
               {e.name}
             </Link>

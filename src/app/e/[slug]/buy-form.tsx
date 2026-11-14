@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
+import { Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { validateBuyerFields, type BuyerFieldErrors } from "@/features/checkout/copy";
 
-const inputCls =
-  "h-12 min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-[invalid=true]:border-destructive";
-
-export function BuyForm({ slug }: { slug: string }) {
+export function BuyForm({ slug, price }: { slug: string; price: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -54,62 +54,64 @@ export function BuyForm({ slug }: { slug: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <div className="space-y-1.5">
-        <label htmlFor="buyer-name" className="text-sm font-medium">
-          Nombre completo
-        </label>
-        <input
-          id="buyer-name"
-          ref={nameRef}
-          className={inputCls}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          autoComplete="name"
-          required
-          aria-invalid={fieldErrors.name ? true : undefined}
-          aria-describedby={fieldErrors.name ? "buyer-name-error" : undefined}
-        />
-        {fieldErrors.name && (
-          <p id="buyer-name-error" role="alert" className="text-sm text-destructive">
-            {fieldErrors.name}
+    <form onSubmit={onSubmit} noValidate>
+      <Card className="flex flex-col gap-4">
+        <div className="space-y-1.5">
+          <label htmlFor="buyer-name" className="text-sm font-bold">
+            Nombre completo
+          </label>
+          <Input
+            id="buyer-name"
+            ref={nameRef}
+            icon={<User />}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+            required
+            aria-invalid={fieldErrors.name ? true : undefined}
+            aria-describedby={fieldErrors.name ? "buyer-name-error" : undefined}
+          />
+          {fieldErrors.name && (
+            <p id="buyer-name-error" role="alert" className="text-sm font-medium text-no">
+              {fieldErrors.name}
+            </p>
+          )}
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="buyer-email" className="text-sm font-bold">
+            Correo electrónico
+          </label>
+          <Input
+            id="buyer-email"
+            ref={emailRef}
+            icon={<Mail />}
+            type="email"
+            inputMode="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+            aria-invalid={fieldErrors.email ? true : undefined}
+            aria-describedby={fieldErrors.email ? "buyer-email-error buyer-email-hint" : "buyer-email-hint"}
+          />
+          <p id="buyer-email-hint" className="text-xs text-muted-foreground">
+            Para identificar tu compra
+          </p>
+          {fieldErrors.email && (
+            <p id="buyer-email-error" role="alert" className="text-sm font-medium text-no">
+              {fieldErrors.email}
+            </p>
+          )}
+        </div>
+        {error && (
+          <p role="alert" className="rounded-[14px] bg-no-soft p-3 text-sm font-medium text-no">
+            {error}
           </p>
         )}
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="buyer-email" className="text-sm font-medium">
-          Correo electrónico
-        </label>
-        <input
-          id="buyer-email"
-          ref={emailRef}
-          className={inputCls}
-          type="email"
-          inputMode="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-          required
-          aria-invalid={fieldErrors.email ? true : undefined}
-          aria-describedby={fieldErrors.email ? "buyer-email-error buyer-email-hint" : "buyer-email-hint"}
-        />
-        <p id="buyer-email-hint" className="text-xs text-muted-foreground">
-          Para identificar tu compra
-        </p>
-        {fieldErrors.email && (
-          <p id="buyer-email-error" role="alert" className="text-sm text-destructive">
-            {fieldErrors.email}
-          </p>
-        )}
-      </div>
-      {error && (
-        <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-      <Button type="submit" size="lg" className="h-12 min-h-11 w-full text-base" disabled={loading}>
-        {loading ? "Generando QR…" : "Pagar con CoDi"}
-      </Button>
+        <Button type="submit" variant="primary" size="full" disabled={loading}>
+          {loading ? "Generando QR…" : `Generar QR por ${price}`}
+        </Button>
+      </Card>
     </form>
   );
 }

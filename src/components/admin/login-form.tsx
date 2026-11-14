@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const FOCUS = "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-600/60";
+import { Input } from "@/components/ui/input";
 
 export function LoginForm() {
   const router = useRouter();
@@ -39,30 +39,32 @@ export function LoginForm() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <label htmlFor="admin-password" className="text-base font-medium">Contraseña</label>
-        <div className="flex gap-2">
-          <input
-            id="admin-password"
-            type={show ? "text" : "password"}
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={`h-12 min-w-0 flex-1 rounded-md border bg-background px-3 text-base ${FOCUS}`}
-            required
-          />
-          <button
-            type="button"
-            onClick={() => setShow((s) => !s)}
-            aria-pressed={show}
-            aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-            className={`h-12 min-w-12 rounded-md border px-3 text-sm font-medium ${FOCUS}`}
-          >
-            {show ? "Ocultar" : "Mostrar"}
-          </button>
-        </div>
+        <label htmlFor="admin-password" className="text-sm font-bold">Contraseña</label>
+        <Input
+          id="admin-password"
+          type={show ? "text" : "password"}
+          autoComplete="current-password"
+          icon={<Lock />}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          wrapperClassName="min-h-[52px] h-[52px] pr-1"
+          required
+          aria-invalid={error ? true : undefined}
+          suffix={
+            <button
+              type="button"
+              onClick={() => setShow((s) => !s)}
+              aria-pressed={show}
+              aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
+              className="flex size-12 items-center justify-center rounded-[14px] text-ink outline-none focus-visible:ring-[3px] focus-visible:ring-mango"
+            >
+              {show ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+            </button>
+          }
+        />
       </div>
-      {error && <p role="alert" className="text-base font-medium text-red-700">{error}</p>}
-      <Button type="submit" className={`h-12 text-base ${FOCUS}`} disabled={busy || !password}>
+      {error && <p role="alert" className="text-sm font-bold text-no">{error}</p>}
+      <Button type="submit" variant="primary" size="full" disabled={busy || !password}>
         {busy ? "Entrando..." : "Entrar"}
       </Button>
     </form>

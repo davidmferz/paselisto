@@ -2,38 +2,43 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, TriangleAlert, WifiOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { initialScan, scanReducer, type ScanOutcome } from "@/features/checkin/scan-state";
 
-// Backgrounds chosen so white text is >= 4.5:1 (green-800 ~7:1, red-800 ~8:1, slate-800 ~12:1).
-function view(o: ScanOutcome): { bg: string; title: string; sub?: string } {
+// Fixed (non-themed) backgrounds so white text keeps >= 4.5:1 in light and dark mode.
+type ResultView = { bg: string; title: string; sub?: string; icon: React.ReactNode; retry?: boolean };
+
+function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-MX", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function view(o: ScanOutcome): ResultView {
   switch (o.kind) {
     case "OK":
-      return { bg: "bg-green-800", title: "ACCESO OK", sub: o.buyer };
+      return { bg: "bg-[#0B7A4B]", title: "Acceso permitido", sub: o.buyer, icon: <Check className="size-16" aria-hidden /> };
     case "ALREADY_USED":
-      return {
-        bg: "bg-red-800",
-        title: "RECHAZADO: ya usado",
-        sub: `Usado a las ${new Date(o.usedAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`,
-      };
+      return { bg: "bg-[#B42318]", title: "Pase ya utilizado", sub: `Ingresó a las ${timeLabel(o.usedAt)}`, icon: <X className="size-16" aria-hidden /> };
     case "NOT_PAID":
-      return { bg: "bg-red-800", title: "RECHAZADO: pago no confirmado" };
+      return { bg: "bg-[#B42318]", title: "Pago no confirmado", sub: "No se registró entrada", icon: <X className="size-16" aria-hidden /> };
     case "WRONG_EVENT":
       return {
-        bg: "bg-amber-800",
+        bg: "bg-[#9A5B00]",
         title: "Otro taller",
         sub: `Válido para «${o.eventName}»${o.startsAt ? ` (${new Date(o.startsAt).toLocaleString("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })})` : ""} · No se registró entrada`,
+        icon: <TriangleAlert className="size-16" aria-hidden />,
       };
     case "NOT_FOUND":
-      return { bg: "bg-red-800", title: "NO EXISTE", sub: "Código no encontrado" };
+      return { bg: "bg-[#B42318]", title: "No existe", sub: "Código no encontrado", icon: <X className="size-16" aria-hidden /> };
     default:
-      return { bg: "bg-slate-800", title: "ERROR", sub: "No se pudo validar. Reintenta." };
+      return { bg: "bg-[#334155]", title: "No pudimos verificar", sub: "El pase NO se marcó como usado", icon: <WifiOff className="size-16" aria-hidden />, retry: true };
   }
 }
 
-const FOCUS = "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-600";
+const FOCUS = "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-mango focus-visible:ring-offset-2";
 
-export function Scanner({ eventId }: { eventId: string }) {
+export function Scanner({ eventId, eventSlug }: { eventId: string; eventSlug: string }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const phaseRef = useRef<"idle" | "validating" | "result">("idle");
@@ -42,6 +47,23 @@ export function Scanner({ eventId }: { eventId: string }) {
   const [code, setCode] = useState("");
   const [camera, setCamera] = useState<"starting" | "on" | "denied" | "off">("starting");
   const [cameraTry, setCameraTry] = useState(0);
+  const [entered, setEntered] = useState<{ n: number; of: number } | null>(null);
+
+  const loadCounts = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/admin/orders?event=${encodeURIComponent(eventSlug)}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const d = (await res.json()) as { counters: { entered: number; sold: number } };
+      setEntered({ n: d.counters.entered, of: d.counters.sold });
+    } catch {
+      /* counts are decorative */
+    }
+  }, [eventSlug]);
+
+  useEffect(() => {
+    const t = setTimeout(() => void loadCounts(), 0);
+    return () => clearTimeout(t);
+  }, [loadCounts]);
 
   useEffect(() => {
     phaseRef.current = state.phase;
@@ -68,13 +90,14 @@ export function Scanner({ eventId }: { eventId: string }) {
         const outcome: ScanOutcome = res.ok ? ((await res.json()) as ScanOutcome) : { kind: "ERROR" };
         phaseRef.current = "result";
         dispatch({ type: "resolve", outcome });
+        if (outcome.kind === "OK") void loadCounts();
         if (fromManual && outcome.kind !== "ERROR") setCode(""); // keep typed code on error
       } catch {
         phaseRef.current = "result";
         dispatch({ type: "resolve", outcome: { kind: "ERROR" } });
       }
     },
-    [router, eventId],
+    [router, eventId, loadCounts],
   );
 
   const next = useCallback(() => {
@@ -116,42 +139,55 @@ export function Scanner({ eventId }: { eventId: string }) {
     <div className="flex flex-col gap-4">
       <div aria-live="polite" role="status" className="sr-only">{announce}</div>
 
+      {entered && (
+        <p className="text-sm text-muted-foreground">
+          Ingresaron <span className="font-data font-bold text-ink">{entered.n}</span> de <span className="font-data font-bold text-ink">{entered.of}</span>
+        </p>
+      )}
+
       {state.phase === "validating" && (
-        <div className="flex min-h-40 w-full items-center justify-center rounded-xl bg-slate-800 p-4 text-center text-2xl font-bold text-white">
-          Validando…
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#334155] p-6 text-center text-white">
+          <span className="text-h1">Validando…</span>
         </div>
       )}
 
       {v && (
-        <div className={`${v.bg} flex min-h-40 w-full flex-col items-center justify-center gap-1 rounded-xl p-4 text-center text-white`}>
-          <span className="text-3xl font-extrabold leading-tight">{v.title}</span>
-          {v.sub && <span className="text-lg font-medium">{v.sub}</span>}
-        </div>
-      )}
-
-      {v && (
-        <div className="flex flex-col gap-2">
-          <Button type="button" onClick={next} className={`h-14 text-lg ${FOCUS}`} autoFocus>
-            Escanear siguiente
-          </Button>
-          {state.phase === "result" && state.outcome.kind === "ERROR" && (
-            <Button
+        <div className={`${v.bg} fixed inset-0 z-50 flex flex-col items-center justify-between gap-6 p-6 text-center text-white`}>
+          <p className="text-label self-start opacity-90">
+            Escaneando{entered ? ` · Ingresaron ${entered.n} de ${entered.of}` : ""}
+          </p>
+          <div className="flex flex-col items-center gap-4">
+            <span className="flex size-28 items-center justify-center rounded-full bg-white/20">{v.icon}</span>
+            <h2 className="text-display">{v.title}</h2>
+            {v.sub && <p className="text-lg font-medium">{v.sub}</p>}
+          </div>
+          <div className="flex w-full max-w-[430px] flex-col gap-3">
+            {v.retry && (
+              <button
+                type="button"
+                className={`h-14 w-full rounded-[14px] border-[1.5px] border-white text-base font-bold text-white ${FOCUS}`}
+                onClick={() => {
+                  const t = lastToken.current;
+                  next();
+                  void redeem(t, true);
+                }}
+              >
+                Reintentar verificación
+              </button>
+            )}
+            <button
               type="button"
-              variant="outline"
-              className={`h-12 text-base ${FOCUS}`}
-              onClick={() => {
-                const t = lastToken.current;
-                next();
-                void redeem(t, true);
-              }}
+              onClick={next}
+              autoFocus
+              className={`h-14 w-full rounded-[14px] bg-white text-lg font-bold text-[#12142B] ${FOCUS}`}
             >
-              Reintentar
-            </Button>
-          )}
+              Escanear siguiente
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl bg-black">
+      <div className="overflow-hidden rounded-[24px] bg-black">
         <video ref={videoRef} muted playsInline className={camera === "on" ? "aspect-square w-full object-cover" : "hidden"} />
         {camera !== "on" && (
           <div className="flex flex-col items-center gap-3 p-6 text-center text-white">
@@ -161,7 +197,7 @@ export function Scanner({ eventId }: { eventId: string }) {
               {camera === "off" && "Cámara no disponible. Usa el código manual."}
             </p>
             {camera !== "starting" && (
-              <Button type="button" variant="secondary" className={`h-12 px-6 text-base ${FOCUS}`} onClick={() => setCameraTry((n) => n + 1)}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setCameraTry((n) => n + 1)}>
                 Reintentar cámara
               </Button>
             )}
@@ -176,8 +212,8 @@ export function Scanner({ eventId }: { eventId: string }) {
         }}
         className="flex flex-col gap-2"
       >
-        <label className="text-base font-medium" htmlFor="code">Código manual</label>
-        <input
+        <label className="text-sm font-bold" htmlFor="code">Código manual</label>
+        <Input
           id="code"
           value={code}
           onChange={(e) => setCode(e.target.value)}
@@ -185,9 +221,8 @@ export function Scanner({ eventId }: { eventId: string }) {
           autoCorrect="off"
           spellCheck={false}
           placeholder="Pega o escribe el código del pase"
-          className={`h-12 rounded-md border bg-background px-3 text-base ${FOCUS}`}
         />
-        <Button type="submit" className={`h-12 text-base ${FOCUS}`} disabled={!code.trim() || state.phase !== "idle"}>
+        <Button type="submit" variant="primary" size="full" disabled={!code.trim() || state.phase !== "idle"}>
           {state.phase === "validating" ? "Validando…" : "Validar"}
         </Button>
       </form>
