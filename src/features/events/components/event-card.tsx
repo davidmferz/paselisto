@@ -74,9 +74,15 @@ export function EventCard({ e }: { e: EventCardData }) {
         </a>
         <Link
           href={`/admin?event=${encodeURIComponent(e.slug)}`}
-          className="inline-flex h-12 w-full items-center justify-center rounded-[14px] bg-ink px-4 text-sm font-bold text-on-ink hover:bg-ink/90"
+          className="inline-flex h-12 flex-1 items-center justify-center rounded-[14px] bg-ink px-4 text-sm font-bold text-on-ink hover:bg-ink/90"
         >
           Ver panel
+        </Link>
+        <Link
+          href={`/admin/scan?event=${encodeURIComponent(e.slug)}`}
+          className="inline-flex h-12 flex-1 items-center justify-center rounded-[14px] bg-mango px-4 text-sm font-bold text-ink hover:brightness-95"
+        >
+          Escanear
         </Link>
       </div>
     </Card>

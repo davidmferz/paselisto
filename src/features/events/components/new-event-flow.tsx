@@ -99,7 +99,7 @@ export function NewEventFlow({ appUrl }: { appUrl: string }) {
         return;
       }
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        window.location.href = "/admin/login?next=%2Fadmin%2Ftalleres%2Fnuevo";
         return;
       }
       setFormError(res.status === 403 ? "No disponible." : "No pudimos publicar el taller. Intenta de nuevo en unos segundos.");
@@ -143,6 +143,12 @@ export function NewEventFlow({ appUrl }: { appUrl: string }) {
           Enviar por WhatsApp
         </a>
         <Button variant="secondary" size="full" onClick={copyLink}>{copied ? "Link copiado" : "Copiar link"}</Button>
+        <Link
+          href={`/admin?event=${encodeURIComponent(published.slug)}`}
+          className="inline-flex h-13 min-h-12 w-full items-center justify-center rounded-[14px] bg-ink px-5 text-base font-bold text-on-ink hover:bg-ink/90"
+        >
+          Ver panel de este taller
+        </Link>
         <Link href="/admin/talleres" className="inline-flex h-13 min-h-12 w-full items-center justify-center rounded-[14px] text-base font-bold text-ink underline">
           Ir a Mis talleres
         </Link>

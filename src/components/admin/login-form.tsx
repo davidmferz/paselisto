@@ -6,7 +6,7 @@ import { Eye, EyeOff, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function LoginForm() {
+export function LoginForm({ next }: { next: string }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -24,7 +24,7 @@ export function LoginForm() {
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
-        router.replace("/admin");
+        router.replace(next);
         router.refresh();
         return;
       }

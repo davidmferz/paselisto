@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Logo } from "@/components/brand";
 import { buttonVariants } from "@/components/ui/button";
 import { EventCard } from "@/features/events/components/event-card";
 import { createEventsEnabled } from "@/features/events/flag";
@@ -14,7 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default async function TalleresPage() {
-  await requireAdminPage();
+  await requireAdminPage("/admin/talleres");
   const cfg = getConfig();
   const events = await listMyEvents(getRepo(), getClock());
   const canCreate = createEventsEnabled();
@@ -22,14 +21,11 @@ export default async function TalleresPage() {
   const sold = events.reduce((n, e) => n + e.counters.sold, 0);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-5 p-4">
-      <header className="flex items-center justify-between gap-2">
-        <Logo />
-        <span className="truncate text-sm text-muted-foreground">{cfg.event.organizer ?? "Organizador"}</span>
-      </header>
+    <main className="mx-auto flex max-w-3xl flex-col gap-5 p-4">
       <div className="flex flex-col gap-1">
         <h1 className="text-h1 font-display">Mis talleres</h1>
         <p className="text-sm text-muted-foreground">
+          {cfg.event.organizer ?? "Organizador"} ·
           {events.length === 0
             ? "Todavía no tienes talleres."
             : `${selling} a la venta · ${sold} lugares vendidos en total`}

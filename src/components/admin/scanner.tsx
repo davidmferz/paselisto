@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, TriangleAlert, WifiOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -183,6 +184,12 @@ export function Scanner({ eventId, eventSlug }: { eventId: string; eventSlug: st
             >
               Escanear siguiente
             </button>
+            <Link
+              href={`/admin?event=${encodeURIComponent(eventSlug)}`}
+              className={`flex h-14 w-full items-center justify-center rounded-[14px] border-[1.5px] border-white text-base font-bold text-white ${FOCUS}`}
+            >
+              Panel
+            </Link>
           </div>
         </div>
       )}
