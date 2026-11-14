@@ -21,6 +21,7 @@ function order(over: Partial<Order> = {}): Order {
     expiresAt: new Date("2026-01-01T00:15:00Z"),
     paidAt: null,
     reviewReason: null,
+    confirmedVia: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     ...over,
   };
@@ -173,7 +174,7 @@ describe("handlePeyWebhook", () => {
 });
 
 describe("applyPayment", () => {
-  const base = { type: "codi.qr.payment_received", payload: {}, orderId: "ord-1", amountCents: 1 };
+  const base = { type: "codi.qr.payment_received", payload: {}, orderId: "ord-1", amountCents: 1, source: "webhook" as const };
 
   it("S6: amount mismatch => review(amount), no pass", async () => {
     const r = await applyPayment({ repo, clock }, { ...base, webhookId: "w1", amountCents: 500 });
@@ -216,6 +217,32 @@ describe("applyPayment", () => {
     const r = await applyPayment({ repo, clock }, { ...base, webhookId: "w1" });
     expect(r.kind).toBe("duplicate");
     expect(passCount()).toBe(1);
+  });
+
+  it("persists source 'webhook' when it transitions to paid", async () => {
+    await applyPayment({ repo, clock }, { ...base, webhookId: "w1" });
+    expect(repo.orders.get("ord-1")!.confirmedVia).toBe("webhook");
+  });
+
+  it("persists source 'poll' when the polling fallback pays", async () => {
+    await applyPayment({ repo, clock }, { ...base, source: "poll" });
+    expect(repo.orders.get("ord-1")!.confirmedVia).toBe("poll");
+  });
+
+  it("persists source on review transitions too", async () => {
+    await applyPayment({ repo, clock }, { ...base, webhookId: "w1", amountCents: 500 });
+    expect(repo.orders.get("ord-1")!.confirmedVia).toBe("webhook");
+  });
+
+  it("noop (already paid) does not overwrite confirmedVia", async () => {
+    await applyPayment({ repo, clock }, { ...base, source: "poll" });
+    await applyPayment({ repo, clock }, { ...base, webhookId: "w-late" });
+    expect(repo.orders.get("ord-1")!.confirmedVia).toBe("poll");
+  });
+
+  it("webhook handler passes source 'webhook'", async () => {
+    await run(signed(payload(), "msg_src"));
+    expect(repo.orders.get("ord-1")!.confirmedVia).toBe("webhook");
   });
 
   it("unknown order => unknown_order", async () => {

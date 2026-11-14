@@ -7,7 +7,7 @@ const clock = new FakeClock();
 const base = (o: Partial<Order> & { id: string }): Order => ({
   eventId: "e1", buyerName: "Ana", buyerEmail: "a@x.mx", amountCents: 1, status: "pending",
   channel: "qr", peyQrId: null, peyTransactionId: null,
-  expiresAt: new Date(clock.now().getTime() + 900_000), paidAt: null, reviewReason: null,
+  expiresAt: new Date(clock.now().getTime() + 900_000), paidAt: null, reviewReason: null, confirmedVia: null,
   createdAt: clock.now(), ...o,
 });
 
@@ -15,7 +15,7 @@ describe("listOrders (PC-S9, PC-S7)", () => {
   it("lists orders with display status and counts; used wins over paid", async () => {
     const repo = new FakeRepo();
     repo.orders.set("a", base({ id: "a", status: "pending" }));
-    repo.orders.set("b", base({ id: "b", status: "paid", paidAt: clock.now() }));
+    repo.orders.set("b", base({ id: "b", status: "paid", paidAt: clock.now(), confirmedVia: "webhook" }));
     repo.orders.set("c", base({ id: "c", status: "paid", paidAt: clock.now() }));
     repo.orders.set("d", base({ id: "d", status: "review", reviewReason: "amount" }));
     repo.passes.set("p1", { id: "p1", orderId: "b", token: "t".repeat(22), usedAt: null });
@@ -26,6 +26,8 @@ describe("listOrders (PC-S9, PC-S7)", () => {
     expect(byId).toEqual({ a: "pending", b: "paid", c: "used", d: "review" });
     expect(r.counts).toEqual({ pending: 1, paid: 1, used: 1, review: 1, expired: 0 });
     expect(r.orders.find((o) => o.id === "d")?.reviewReason).toBe("amount");
+    expect(r.orders.find((o) => o.id === "b")?.confirmedVia).toBe("webhook");
+    expect(r.orders.find((o) => o.id === "a")?.confirmedVia).toBeNull();
   });
 
   it("derives expired lazily for pending orders past expiresAt", async () => {

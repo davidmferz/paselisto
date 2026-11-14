@@ -22,6 +22,8 @@ export type ApplyInput = {
   amountCents: number;
   transactionId?: string;
   paidAt?: Date;
+  /** Who confirmed the payment; persisted only on the pending -> paid/review transition. */
+  source: "webhook" | "poll";
 };
 
 /**
@@ -58,12 +60,13 @@ export async function applyPayment(
         status: "paid",
         paidAt: i.paidAt ?? now,
         peyTransactionId: i.transactionId ?? null,
+        confirmedVia: i.source,
       });
       await tx.insertPass({ id: randomUUID(), orderId: order.id, token: generateToken(), usedAt: null });
       return { kind: "paid", orderId: order.id } as const;
     }
     if (decision.kind === "review") {
-      await tx.updateOrder(order.id, { status: "review", reviewReason: decision.reason });
+      await tx.updateOrder(order.id, { status: "review", reviewReason: decision.reason, confirmedVia: i.source });
       return { kind: "review", reason: decision.reason } as const;
     }
     return { kind: "noop" } as const;
@@ -128,6 +131,7 @@ export async function handlePeyWebhook(i: {
       { repo: i.repo, clock: i.clock },
       {
         webhookId,
+        source: "webhook",
         type,
         payload: body,
         orderId: str(body.metadata?.externalMetadata?.orderId),

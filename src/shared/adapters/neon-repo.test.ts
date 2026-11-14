@@ -8,13 +8,25 @@ describe("neon-repo row mapping", () => {
     const o = mapOrderRow({
       id: "o1", event_id: "e1", buyer_name: "Ana", buyer_email: "a@x.mx", amount_cents: 1,
       status: "pending", channel: "qr", pey_qr_id: "q1", pey_transaction_id: null,
-      expires_at: d, paid_at: null, review_reason: null, created_at: d,
+      expires_at: d, paid_at: null, review_reason: null, confirmed_via: "poll", created_at: d, pey_qr_string: "0002-qr",
     });
     expect(o).toEqual({
       id: "o1", eventId: "e1", buyerName: "Ana", buyerEmail: "a@x.mx", amountCents: 1,
       status: "pending", channel: "qr", peyQrId: "q1", peyTransactionId: null,
-      expiresAt: d, paidAt: null, reviewReason: null, createdAt: d,
+      expiresAt: d, paidAt: null, reviewReason: null, confirmedVia: "poll", createdAt: d, peyQrString: "0002-qr",
     });
+  });
+
+  it("maps a missing pey_qr_string to null", () => {
+    const o = mapOrderRow({
+      id: "o1", event_id: "e1", buyer_name: "Ana", buyer_email: "a@x.mx", amount_cents: 1,
+      status: "pending", channel: "qr", expires_at: d, created_at: d,
+    });
+    expect(o.peyQrString).toBeNull();
+  });
+
+  it("patch can set pey_qr_string", () => {
+    expect(orderPatchToSet({ peyQrString: "qr" }).sql).toBe("pey_qr_string = $1");
   });
 
   it("maps a pass row", () => {

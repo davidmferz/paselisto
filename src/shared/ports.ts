@@ -13,7 +13,11 @@ export type Order = {
   expiresAt: Date;
   paidAt: Date | null;
   reviewReason: string | null;
+  /** How the payment was confirmed; set only when the order leaves pending. */
+  confirmedVia: "webhook" | "poll" | null;
   createdAt: Date;
+  /** CoDi QR payload, persisted so the pay screen works without ?qr=. Optional for older fixtures. */
+  peyQrString?: string | null;
 };
 
 export type Pass = { id: string; orderId: string; token: string; usedAt: Date | null };

@@ -23,7 +23,9 @@ export function mapOrderRow(r: Row): Order {
     expiresAt: r.expires_at as Date,
     paidAt: (r.paid_at as Date | null) ?? null,
     reviewReason: (r.review_reason as string | null) ?? null,
+    confirmedVia: (r.confirmed_via as Order["confirmedVia"]) ?? null,
     createdAt: r.created_at as Date,
+    peyQrString: (r.pey_qr_string as string | null) ?? null,
   };
 }
 
@@ -59,7 +61,9 @@ const ORDER_COLUMNS: Record<keyof Order, string> = {
   expiresAt: "expires_at",
   paidAt: "paid_at",
   reviewReason: "review_reason",
+  confirmedVia: "confirmed_via",
   createdAt: "created_at",
+  peyQrString: "pey_qr_string",
 };
 
 export function orderPatchToSet(patch: Partial<Order>): { sql: string; values: unknown[] } {
@@ -113,10 +117,10 @@ class NeonTx implements Tx {
   async insertOrder(o: Order): Promise<void> {
     await this.c.query(
       `INSERT INTO orders(id, event_id, buyer_name, buyer_email, amount_cents, status, channel,
-         pey_qr_id, pey_transaction_id, expires_at, paid_at, review_reason, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+         pey_qr_id, pey_transaction_id, expires_at, paid_at, review_reason, confirmed_via, created_at, pey_qr_string)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [o.id, o.eventId, o.buyerName, o.buyerEmail, o.amountCents, o.status, o.channel,
-        o.peyQrId, o.peyTransactionId, o.expiresAt, o.paidAt, o.reviewReason, o.createdAt],
+        o.peyQrId, o.peyTransactionId, o.expiresAt, o.paidAt, o.reviewReason, o.confirmedVia, o.createdAt, o.peyQrString ?? null],
     );
   }
 

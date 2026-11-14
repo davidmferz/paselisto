@@ -9,6 +9,7 @@ export type AdminOrder = {
   amountCents: number;
   status: AdminStatus;
   reviewReason: string | null;
+  confirmedVia: "webhook" | "poll" | null;
   createdAt: string;
   usedAt: string | null;
 };
@@ -33,6 +34,7 @@ export async function listOrders(repo: OrdersRepo, clock: Clock): Promise<AdminO
       amountCents: order.amountCents,
       status,
       reviewReason: order.reviewReason,
+      confirmedVia: order.confirmedVia,
       createdAt: order.createdAt.toISOString(),
       usedAt: usedAt ? usedAt.toISOString() : null,
     };

@@ -32,7 +32,7 @@ describe.skipIf(!url)("neon-repo integration (real DB)", () => {
     const order: Order = {
       id: orderId, eventId, buyerName: "Ana", buyerEmail: "a@x.mx", amountCents: 1, status: "paid",
       channel: "qr", peyQrId: `qr-${orderId}`, peyTransactionId: null,
-      expiresAt: new Date(now.getTime() + 60_000), paidAt: now, reviewReason: null, createdAt: now,
+      expiresAt: new Date(now.getTime() + 60_000), paidAt: now, reviewReason: null, confirmedVia: null, createdAt: now,
     };
     const wid = `wh-${randomUUID()}`;
     const [first, second] = await repo.withEventLock(eventId, async (tx) => {

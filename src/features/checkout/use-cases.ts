@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { effectiveStatus, hasCapacity, validateBuyer } from "./domain";
+import { shortRef } from "./copy";
 import { applyPayment } from "@/features/webhook/handle-payment";
 import type { Clock, OrderStatus, OrdersRepo, PeyClient } from "@/shared/ports";
 
 export const ORDER_TTL_SEC = 900;
-export const FALLBACK_AFTER_MS = 20_000;
+/** Head start for the signed webhook before the polling fallback kicks in. */
+export const FALLBACK_AFTER_MS = 45_000;
 
 type Deps = { repo: OrdersRepo; pey: PeyClient; clock: Clock };
 
@@ -46,6 +48,7 @@ export async function createOrder(
       expiresAt,
       paidAt: null,
       reviewReason: null,
+      confirmedVia: null,
       createdAt: now,
     });
     return true;
@@ -60,7 +63,7 @@ export async function createOrder(
       expirationSec: ORDER_TTL_SEC,
       orderId,
     });
-    await deps.repo.withEventLock(event.id, (tx) => tx.updateOrder(orderId, { peyQrId: qr.id }));
+    await deps.repo.withEventLock(event.id, (tx) => tx.updateOrder(orderId, { peyQrId: qr.id, peyQrString: qr.qrString }));
     return { kind: "ok", orderId, qrString: qr.qrString, expiresAt };
   } catch (err) {
     console.error("createOrder: pey createQr failed", err instanceof Error ? err.message : err);
@@ -96,24 +99,35 @@ export type OrderStatusResult =
       buyerName: string;
       expiresAt: Date;
       passToken?: string;
+      /** Short human reference (support / review state). */
+      orderRef: string;
+      /** Only while pending: the CoDi QR payload. */
+      qrString?: string;
     };
 
-export async function getOrderStatus(deps: Deps, orderId: string): Promise<OrderStatusResult> {
+export async function getOrderStatus(
+  deps: Deps,
+  orderId: string,
+  opts: { forceCheck?: boolean } = {},
+): Promise<OrderStatusResult> {
   let order = await deps.repo.findOrder({ orderId });
   if (!order) return { kind: "not_found" };
 
   const now = deps.clock.now();
-  if (
-    effectiveStatus(order, now) === "pending" &&
-    order.peyQrId &&
-    now.getTime() - order.createdAt.getTime() > FALLBACK_AFTER_MS
-  ) {
+  const eff = effectiveStatus(order, now);
+  // forceCheck (buyer-initiated "Ya pagué"/"Ya realicé el pago") skips the head-start window and
+  // also covers expired orders: a late PAID goes to review via applyPayment, never to a new order.
+  const shouldCheck = opts.forceCheck
+    ? eff === "pending" || eff === "expired"
+    : eff === "pending" && now.getTime() - order.createdAt.getTime() > FALLBACK_AFTER_MS;
+  if (shouldCheck && order.peyQrId) {
     try {
       if ((await deps.pey.getQrStatus(order.peyQrId)) === "PAID") {
         // Same idempotent path as the webhook (no webhookId).
         await applyPayment(
           { repo: deps.repo, clock: deps.clock },
           {
+            source: "poll",
             type: "poll.fallback",
             payload: { source: "getQrStatus" },
             orderId: order.id,
@@ -136,6 +150,8 @@ export async function getOrderStatus(deps: Deps, orderId: string): Promise<Order
     status,
     buyerName: order.buyerName,
     expiresAt: order.expiresAt,
+    orderRef: shortRef(order.id),
+    ...(status === "pending" && order.peyQrString ? { qrString: order.peyQrString } : {}),
     ...(pass ? { passToken: pass.token } : {}),
   };
 }
