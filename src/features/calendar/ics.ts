@@ -24,7 +24,7 @@ function endOf(e: CalendarEvent): Date {
 
 /** TEXT escaping per RFC 5545 3.3.11. */
 function escapeText(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
+  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 }
 
 /** Fold to <= 75 octets per line (continuations start with one space), never splitting a code point. */

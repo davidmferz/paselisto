@@ -39,7 +39,7 @@ describe("buildIcs", () => {
   });
 
   it("escapes commas, semicolons, backslashes and newlines in text values", () => {
-    expect(unfolded).toContain("SUMMARY:Taller de cerámica\\, nivel 1\; demo");
+    expect(unfolded).toContain("SUMMARY:Taller de cerámica\\, nivel 1\\; demo");
     expect(unfolded).toContain("LOCATION:Estudio Barro Vivo\\, Roma Norte\\, CDMX");
     expect(unfolded).toContain("DESCRIPTION:Tu pase: https://app.mx/order/");
     expect(unfolded).toContain("\\nCódigo manual: TOKEN_abc-123456789012");
