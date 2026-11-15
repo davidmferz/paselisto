@@ -7,6 +7,8 @@ import type { Clock, EventRow, OrderStatus, OrdersRepo, PeyClient } from "@/shar
 export const ORDER_TTL_SEC = 900;
 /** Head start for the signed webhook before the polling fallback kicks in. */
 export const FALLBACK_AFTER_MS = 45_000;
+/** Min gap between pey fallback queries per order (lets the signed webhook win). */
+export const PEY_CHECK_INTERVAL_MS = 10_000;
 
 type Deps = { repo: OrdersRepo; pey: PeyClient; clock: Clock; onPaid?: (orderId: string) => Promise<void> };
 
@@ -178,7 +180,9 @@ export async function getOrderStatus(
     : eff === "pending" && now.getTime() - order.createdAt.getTime() > FALLBACK_AFTER_MS;
   if (shouldCheck && order.peyQrId) {
     try {
-      if ((await deps.pey.getQrStatus(order.peyQrId)) === "PAID") {
+      // Throttle (cross-instance, atomic) unless the buyer explicitly asked.
+      const allowed = opts.forceCheck || (await deps.repo.claimPeyCheck(order.id, now, PEY_CHECK_INTERVAL_MS));
+      if (allowed && (await deps.pey.getQrStatus(order.peyQrId)) === "PAID") {
         // Same idempotent path as the webhook (no webhookId).
         await applyPayment(
           { repo: deps.repo, clock: deps.clock, onPaid: deps.onPaid },

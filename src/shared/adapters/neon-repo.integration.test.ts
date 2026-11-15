@@ -92,4 +92,10 @@ describe.skipIf(!url)("neon-repo integration (real DB)", () => {
     expect((await repo.findPassByToken(token))?.orderId).toBe(orderId);
     expect(await repo.findPassByToken("nope")).toBeNull();
   });
+
+  it("claimPeyCheck is atomic and throttled", async () => {
+    const wins = await Promise.all([repo.claimPeyCheck(orderId, new Date(), 10_000), repo.claimPeyCheck(orderId, new Date(), 10_000)]);
+    expect(wins.filter(Boolean)).toHaveLength(1);
+    expect(await repo.claimPeyCheck(orderId, new Date(), 10_000)).toBe(false);
+  });
 });

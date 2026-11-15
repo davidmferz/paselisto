@@ -111,6 +111,16 @@ export class FakeRepo implements OrdersRepo {
     return true;
   }
 
+  /** orderId -> last pey check (mirrors orders.last_pey_check_at). */
+  lastPeyCheckAt = new Map<string, Date>();
+
+  async claimPeyCheck(orderId: string, now: Date, intervalMs: number): Promise<boolean> {
+    const last = this.lastPeyCheckAt.get(orderId);
+    if (last && now.getTime() - last.getTime() < intervalMs) return false;
+    this.lastPeyCheckAt.set(orderId, now);
+    return true;
+  }
+
   async releasePassEmail(orderId: string): Promise<void> {
     this.emailSentAt.delete(orderId);
   }

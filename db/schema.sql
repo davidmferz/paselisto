@@ -36,6 +36,7 @@ create table if not exists orders (
 alter table orders add column if not exists confirmed_via text;
 alter table orders add column if not exists pey_qr_string text;
 alter table orders add column if not exists email_sent_at timestamptz;
+alter table orders add column if not exists last_pey_check_at timestamptz;
 
 create index if not exists orders_event_status_idx on orders (event_id, status);
 

@@ -107,6 +107,12 @@ export interface OrdersRepo {
    * WHERE id = $1 AND email_sent_at IS NULL`. true only for the single winner.
    */
   claimPassEmail(orderId: string): Promise<boolean>;
+  /**
+   * Atomic throttle for the pey polling fallback: `UPDATE orders SET last_pey_check_at = now()
+   * WHERE id = $1 AND (last_pey_check_at IS NULL OR last_pey_check_at < now() - interval)`.
+   * true only for the caller allowed to query pey now.
+   */
+  claimPeyCheck(orderId: string, now: Date, intervalMs: number): Promise<boolean>;
   /** Clears the claim after a failed/skipped send so a later retry can resend. */
   releasePassEmail(orderId: string): Promise<void>;
 }

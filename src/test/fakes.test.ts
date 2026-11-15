@@ -57,3 +57,14 @@ describe("FakeRepo pass email claim + findPassByToken", () => {
     expect(await r.findPassByToken("zzz")).toBeNull();
   });
 });
+
+describe("FakeRepo pey check claim", () => {
+  it("claims at most once per interval", async () => {
+    const { FakeRepo } = await import("./fakes");
+    const r = new FakeRepo();
+    const t = new Date("2026-01-01T00:00:00Z");
+    expect(await r.claimPeyCheck("o1", t, 10_000)).toBe(true);
+    expect(await r.claimPeyCheck("o1", new Date(t.getTime() + 9_000), 10_000)).toBe(false);
+    expect(await r.claimPeyCheck("o1", new Date(t.getTime() + 11_000), 10_000)).toBe(true);
+  });
+});

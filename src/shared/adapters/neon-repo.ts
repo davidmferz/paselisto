@@ -278,6 +278,19 @@ export function createNeonRepo(connectionString: string): OrdersRepo {
       }
     },
 
+    async claimPeyCheck(orderId: string, _now: Date, intervalMs: number): Promise<boolean> {
+      const pool = new Pool({ connectionString });
+      try {
+        const r = await pool.query(
+          "UPDATE orders SET last_pey_check_at = now() WHERE id = $1 AND (last_pey_check_at IS NULL OR last_pey_check_at < now() - make_interval(secs => $2::float8 / 1000)) RETURNING id",
+          [orderId, intervalMs],
+        );
+        return (r.rowCount ?? 0) > 0;
+      } finally {
+        await pool.end();
+      }
+    },
+
     async claimPassEmail(orderId: string): Promise<boolean> {
       const pool = new Pool({ connectionString });
       try {

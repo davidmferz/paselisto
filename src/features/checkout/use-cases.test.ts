@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { FALLBACK_AFTER_MS, createOrder, getCalendarInfo, getEventView, getOrderEventView, getOrderStatus } from "./use-cases";
+import { PEY_CHECK_INTERVAL_MS, FALLBACK_AFTER_MS, createOrder, getCalendarInfo, getEventView, getOrderEventView, getOrderStatus } from "./use-cases";
 import { applyPayment } from "@/features/webhook/handle-payment";
 import { FakeClock, FakePey, FakeRepo } from "@/test/fakes";
 
@@ -290,5 +290,52 @@ describe("getOrderStatus onPaid (polling path)", () => {
     await getOrderStatus(d, r.orderId, { forceCheck: true });
     await getOrderStatus(d, r.orderId, { forceCheck: true });
     expect(calls).toEqual([r.orderId]);
+  });
+});
+
+describe("getOrderStatus pey fallback throttle", () => {
+  async function newOrder() {
+    const r = await createOrder(deps(), { slug: "fiesta", ...buyer(1) });
+    if (r.kind !== "ok") throw new Error("setup");
+    return r.orderId;
+  }
+  const spy = () => {
+    const calls: number[] = [];
+    const orig = pey.getQrStatus.bind(pey);
+    pey.getQrStatus = async (qid: string) => {
+      calls.push(clock.now().getTime());
+      return orig(qid);
+    };
+    return calls;
+  };
+
+  it("PEY_CHECK_INTERVAL_MS is 10s", () => {
+    expect(PEY_CHECK_INTERVAL_MS).toBe(10_000);
+  });
+
+  it("no pey call before 45s; first at 46s; 50s skipped; 57s calls again", async () => {
+    const id = await newOrder();
+    const calls = spy();
+    clock.advance(44_000);
+    await getOrderStatus(deps(), id);
+    expect(calls).toHaveLength(0);
+    clock.advance(2_000); // 46s
+    await getOrderStatus(deps(), id);
+    expect(calls).toHaveLength(1);
+    clock.advance(4_000); // 50s
+    await getOrderStatus(deps(), id);
+    expect(calls).toHaveLength(1);
+    clock.advance(7_000); // 57s
+    await getOrderStatus(deps(), id);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("forceCheck bypasses window and throttle", async () => {
+    const id = await newOrder();
+    const calls = spy();
+    clock.advance(5_000);
+    await getOrderStatus(deps(), id, { forceCheck: true });
+    await getOrderStatus(deps(), id, { forceCheck: true });
+    expect(calls).toHaveLength(2);
   });
 });
